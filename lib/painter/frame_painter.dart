@@ -115,20 +115,24 @@ class FramePainter extends CustomPainter {
     final bH = params.batten.actualHeightMm / 1000.0;
 
     final wood = const Color(0xFFD1A77C);
+    final woodDark = const Color(0xFFB89068);
     final studColor = const Color(0xFFE2B896);
     final joistColor = const Color(0xFFC4976D);
     final roofColor = const Color(0xFFB8855A);
     final battenColor = const Color(0xFFA67B52);
     final ridgeColor = const Color(0xFF9E6A40);
 
-    void drawBottomPlate(double x, double z, double w, double d) {
-      if (params.bottomPlateType == BottomPlateType.solid) {
-        addBox(x, 0.0, z, w, 0.150, d, wood);
-      } else {
-        final boardH = params.plates.actualHeightMm / 1000.0;
-        addBox(x, 0.0, z, w, boardH, d, wood);
-        addBox(x, boardH, z, w, boardH, d, wood);
-        addBox(x, boardH * 2, z, w, boardH, d, wood);
+    void drawBottomPlate(double x, double z, double w, double d, {bool isCentral = false}) {
+      final sec = params.bottomPlateType == BottomPlateType.solid ? 0.150 : params.plates.actualHeightMm / 1000.0;
+      final mult = params.bottomPlateMultiplier;
+      
+      for (int i = 0; i < mult; i++) {
+        final color = i % 2 == 0 ? wood : woodDark;
+        if (isCentral) {
+          addBox(x, i * sec, z, w, sec, d, color);
+        } else {
+          addBox(x, i * sec, z, w, sec, d, color);
+        }
       }
     }
 
@@ -155,13 +159,13 @@ class FramePainter extends CustomPainter {
       final sillM = op.sillHeightMm / 1000.0;
       
       if (wall == WallSide.front || wall == WallSide.back) {
-        final z = wall == WallSide.front ? 0.0 : W - pW; // <-- Исправлено на 0.0
+        final z = wall == WallSide.front ? 0.0 : W - pW;
         addBox(pos, sillM + hM, z, wM, pH, pW, studColor);
         if (op.type == OpeningType.window) {
           addBox(pos, sillM, z, wM, pH, pW, studColor);
         }
       } else {
-        final x = wall == WallSide.left ? 0.0 : L - pW; // <-- Исправлено на 0.0
+        final x = wall == WallSide.left ? 0.0 : L - pW;
         addBox(x, sillM + hM, pos, pW, pH, wM, studColor);
         if (op.type == OpeningType.window) {
           addBox(x, sillM, pos, pW, pH, wM, studColor);
@@ -170,6 +174,7 @@ class FramePainter extends CustomPainter {
     }
 
     if (dim.isAFrame) {
+      // ... (А-фрейм оставляем без изменений)
       drawBottomPlate(0.0, 0.0, L, pW);
       drawBottomPlate(0.0, W - pW, L, pW);
       drawBottomPlate(0.0, pW, pW, W - 2 * pW);
@@ -185,17 +190,27 @@ class FramePainter extends CustomPainter {
       }
       addBox(0.0, ridge - rH / 2, midZ - rW / 2, L, rH, rW, ridgeColor);
     } else {
-      for (double x = pW * 2; x < L - pW; x += spacing) {
-        addBox(x, pH, pW, jW, jH, W - 2 * pW, joistColor);
-      }
-
+      // 1. Периметр и центральные балки
       drawBottomPlate(0.0, 0.0, L, pW);
       drawBottomPlate(0.0, W - pW, L, pW);
       drawBottomPlate(0.0, pW, pW, W - 2 * pW);
       drawBottomPlate(L - pW, pW, pW, W - 2 * pW);
 
+      if (dim.centralBeamCount > 0) {
+        for (int i = 1; i <= dim.centralBeamCount; i++) {
+          final zPos = W * (i / (dim.centralBeamCount + 1)) - pW / 2;
+          drawBottomPlate(pW, zPos, L - 2 * pW, pW, isCentral: true);
+        }
+      }
+
+      // 2. Лаги пола
+      for (double x = pW * 2; x < L - pW; x += spacing) {
+        addBox(x, pH + 0.05, pW, jW, jH, W - 2 * pW, joistColor);
+      }
+
+      // 3. Стойки и проемы (Перед/Зад)
       for (final wall in [WallSide.front, WallSide.back]) {
-        final z = wall == WallSide.front ? 0.0 : W - sW; // <-- Исправлено на 0.0
+        final z = wall == WallSide.front ? 0.0 : W - sW;
         for (double x = pW; x < L - 0.1; x += spacing) {
           if (!isOpening(x, wall)) addBox(x, pH, z, sW, H - pH * 2, sW, studColor);
         }
@@ -211,8 +226,9 @@ class FramePainter extends CustomPainter {
         }
       }
 
+      // 4. Стойки и проемы (Лево/Право)
       for (final wall in [WallSide.left, WallSide.right]) {
-        final x = wall == WallSide.left ? 0.0 : L - sW; // <-- Исправлено на 0.0
+        final x = wall == WallSide.left ? 0.0 : L - sW;
         for (double z = pW * 2; z < W - 0.1; z += spacing) {
           if (!isOpening(z, wall)) addBox(x, pH, z, sW, H - pH * 2, sW, studColor);
         }
