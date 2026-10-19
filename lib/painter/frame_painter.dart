@@ -121,19 +121,28 @@ class FramePainter extends CustomPainter {
     final battenColor = const Color(0xFFA67B52);
     final ridgeColor = const Color(0xFF9E6A40);
 
-    // Функция проверки, попадает ли стойка в проем
-    bool isOpening(double pos, WallSide wall, out) {
+    // Отрисовка нижней обвязки (ростверка)
+    void drawBottomPlate(double x, double z, double w, double d) {
+      if (params.bottomPlateType == BottomPlateType.solid) {
+        addBox(x, 0, z, w, 0.150, d, wood); // Монолит 150х150
+      } else {
+        // Пакет из 3-х досок
+        final boardH = params.plates.actualHeightMm / 1000.0;
+        final boardW = params.plates.actualWidthMm / 1000.0;
+        addBox(x, 0, z, w, boardH, d, wood);
+        addBox(x, boardH, z, w, boardH, d, wood);
+        addBox(x, boardH * 2, z, w, boardH, d, wood);
+      }
+    }
+
+    bool isOpening(double pos, WallSide wall) {
       final wallOpenings = params.openings.where((o) => o.wall == wall).toList();
       if (wallOpenings.isEmpty) return false;
-      
-      // Равномерное распределение окон
       double currentX = 0;
       final wallLen = (wall == WallSide.front || wall == WallSide.back) ? L : W;
-      
       for (final op in wallOpenings) {
         final wM = op.widthMm / 1000;
         final gap = (wallLen - wallOpenings.fold<double>(0, (s, o) => s + (o.widthMm / 1000) * o.quantity)) / (wallOpenings.fold<int>(0, (s, o) => s + o.quantity) + 1);
-        
         for (int i = 0; i < op.quantity; i++) {
           currentX += gap;
           if (pos >= currentX - 0.01 && pos <= currentX + wM + 0.01) return true;
@@ -143,34 +152,27 @@ class FramePainter extends CustomPainter {
       return false;
     }
 
-    // Рисуем проемы (Обрамление)
     void drawFraming(WallSide wall, double pos, Opening op) {
-      // Упрощенная отрисовка обрамления (ригель и подоконник)
       final wM = op.widthMm / 1000;
       final hM = op.heightMm / 1000;
       final sillM = op.sillHeightMm / 1000;
-      
       if (wall == WallSide.front || wall == WallSide.back) {
         final z = wall == WallSide.front ? 0 : W - pW;
-        addBox(pos, sillM + hM, z, wM, pH, pW, studColor); // Ригель
-        if (op.type == OpeningType.window) {
-          addBox(pos, sillM, z, wM, pH, pW, studColor); // Подоконник
-        }
+        addBox(pos, sillM + hM, z, wM, pH, pW, studColor);
+        if (op.type == OpeningType.window) addBox(pos, sillM, z, wM, pH, pW, studColor);
       } else {
         final x = wall == WallSide.left ? 0 : L - pW;
-        addBox(x, sillM + hM, pos, pW, pH, wM, studColor); // Ригель
-        if (op.type == OpeningType.window) {
-          addBox(x, sillM, pos, pW, pH, wM, studColor); // Подоконник
-        }
+        addBox(x, sillM + hM, pos, pW, pH, wM, studColor);
+        if (op.type == OpeningType.window) addBox(x, sillM, pos, pW, pH, wM, studColor);
       }
     }
 
     if (dim.isAFrame) {
-      // ... (А-фрейм оставляем как есть, он не имеет вертикальных стен)
-      addBox(0, 0, 0, L, pH, pW, wood);
-      addBox(0, 0, W - pW, L, pH, pW, wood);
-      addBox(0, 0, pW, pW, pH, W - 2 * pW, wood);
-      addBox(L - pW, 0, pW, pW, pH, W - 2 * pW, wood);
+      drawBottomPlate(0, 0, L, pW);
+      drawBottomPlate(0, W - pW, L, pW);
+      drawBottomPlate(0, pW, pW, W - 2 * pW);
+      drawBottomPlate(L - pW, pW, pW, W - 2 * pW);
+
       for (double x = pW * 2; x < L - pW; x += spacing) {
         addBox(x, pH, pW, jW, jH, W - 2 * pW, joistColor);
       }
@@ -181,28 +183,23 @@ class FramePainter extends CustomPainter {
       }
       addBox(0, ridge - rH / 2, midZ - rW / 2, L, rH, rW, ridgeColor);
     } else {
-      // --- ОБЫЧНЫЕ ДОМА (С ПРОЕМАМИ) ---
-      
       // 1. Лаги пола (внутри обвязки)
       for (double x = pW * 2; x < L - pW; x += spacing) {
         addBox(x, pH, pW, jW, jH, W - 2 * pW, joistColor);
       }
 
-      // 2. Нижняя обвязка (периметр)
-      addBox(0, 0, 0, L, pH, pW, wood);
-      addBox(0, 0, W - pW, L, pH, pW, wood);
-      addBox(0, 0, pW, pW, pH, W - 2 * pW, wood);
-      addBox(L - pW, 0, pW, pW, pH, W - 2 * pW, wood);
+      // 2. Ростверк
+      drawBottomPlate(0, 0, L, pW);
+      drawBottomPlate(0, W - pW, L, pW);
+      drawBottomPlate(0, pW, pW, W - 2 * pW);
+      drawBottomPlate(L - pW, pW, pW, W - 2 * pW);
 
-      // 3. Стойки и Проемы (Передняя и Задняя стены)
+      // 3. Стойки и проемы (Перед/Зад)
       for (final wall in [WallSide.front, WallSide.back]) {
         final z = wall == WallSide.front ? 0 : W - sW;
         for (double x = pW; x < L - 0.1; x += spacing) {
-          if (!isOpening(x, wall, null)) {
-            addBox(x, pH, z, sW, H - pH * 2, sW, studColor);
-          }
+          if (!isOpening(x, wall)) addBox(x, pH, z, sW, H - pH * 2, sW, studColor);
         }
-        // Отрисовка рам
         final wallOpenings = params.openings.where((o) => o.wall == wall).toList();
         double currentX = 0;
         final gap = (L - wallOpenings.fold<double>(0, (s, o) => s + (o.widthMm / 1000) * o.quantity)) / (wallOpenings.fold<int>(0, (s, o) => s + o.quantity) + 1);
@@ -215,13 +212,11 @@ class FramePainter extends CustomPainter {
         }
       }
 
-      // 4. Стойки и Проемы (Левая и Правая стены)
+      // 4. Стойки и проемы (Лево/Право)
       for (final wall in [WallSide.left, WallSide.right]) {
         final x = wall == WallSide.left ? 0 : L - sW;
         for (double z = pW * 2; z < W - 0.1; z += spacing) {
-          if (!isOpening(z, wall, null)) {
-            addBox(x, pH, z, sW, H - pH * 2, sW, studColor);
-          }
+          if (!isOpening(z, wall)) addBox(x, pH, z, sW, H - pH * 2, sW, studColor);
         }
         final wallOpenings = params.openings.where((o) => o.wall == wall).toList();
         double currentZ = 0;
@@ -235,19 +230,16 @@ class FramePainter extends CustomPainter {
         }
       }
 
-      // Угловые стойки
       addBox(0, pH, 0, sW, H - pH * 2, sW, studColor);
       addBox(L - sW, pH, 0, sW, H - pH * 2, sW, studColor);
       addBox(0, pH, W - sW, sW, H - pH * 2, sW, studColor);
       addBox(L - sW, pH, W - sW, sW, H - pH * 2, sW, studColor);
 
-      // 5. Верхняя обвязка
       addBox(0, H - pH, 0, L, pH, pW, wood);
       addBox(0, H - pH, W - pW, L, pH, pW, wood);
       addBox(0, H - pH, pW, pW, pH, W - 2 * pW, wood);
       addBox(L - pW, H - pH, pW, pW, pH, W - 2 * pW, wood);
 
-      // 6. Крыша и Обрешётка
       if (showRoof) {
         final ridgeY = H + ridge;
         final midZ = W / 2;
@@ -257,14 +249,12 @@ class FramePainter extends CustomPainter {
         final zLeft = -dim.eaveOverhangM;
         final zRight = W + dim.eaveOverhangM;
 
-        // Стропила
         for (double x = pW; x < L - 0.1; x += spacing) {
           addRafter(x, yStart, zLeft, ridgeY, midZ, rW, rH, roofColor);
           addRafter(x, yStart, zRight, ridgeY, midZ, rW, rH, roofColor);
         }
         addBox(0, ridgeY - rH / 2, midZ - rW / 2, L, rH, rW, ridgeColor);
 
-        // Обрешётка (горизонтальные доски поверх стропил)
         final battenSpacingM = params.battenSpacingMm / 1000;
         final slopeLen = math.sqrt(math.pow(midZ - zLeft, 2) + math.pow(ridgeY - yStart, 2));
         final battenCount = (slopeLen / battenSpacingM).ceil() + 1;
@@ -276,9 +266,7 @@ class FramePainter extends CustomPainter {
           final zR = zRight - (zRight - midZ) * t;
           final yR = yStart + (ridgeY - yStart) * t;
           
-          // Левая обрешётка
           addBox(0, yL + rH, zL - bW/2, L, bH, bW, battenColor);
-          // Правая обрешётка
           addBox(0, yR + rH, zR - bW/2, L, bH, bW, battenColor);
         }
       }
