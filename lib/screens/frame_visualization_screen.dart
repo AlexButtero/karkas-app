@@ -25,10 +25,20 @@ class _FrameVisualizationScreenState extends State<FrameVisualizationScreen> {
   Offset _pan = Offset.zero;
   Offset _lastFocal = Offset.zero;
   bool _showRoof = true;
+  bool _showWalls = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Поднимаем камеру для А-фрейм, чтобы смотреть сверху
+    if (widget.dimensions.isAFrame) {
+      _pitch = 0.85;
+    }
+  }
 
   void _reset() => setState(() {
         _rotation = -0.6;
-        _pitch = 0.55;
+        _pitch = widget.dimensions.isAFrame ? 0.85 : 0.55;
         _zoom = 1.0;
         _pan = Offset.zero;
       });
@@ -40,9 +50,14 @@ class _FrameVisualizationScreenState extends State<FrameVisualizationScreen> {
         title: const Text('3D Каркас'),
         actions: [
           IconButton(
+            tooltip: _showWalls ? 'Скрыть стены' : 'Показать стены',
+            onPressed: () => setState(() => _showWalls = !_showWalls),
+            icon: Icon(_showWalls ? Icons.wallpaper : Icons.wallpaper_outlined),
+          ),
+          IconButton(
             tooltip: _showRoof ? 'Скрыть крышу' : 'Показать крышу',
             onPressed: () => setState(() => _showRoof = !_showRoof),
-            icon: Icon(_showRoof ? Icons.roofing_outlined : Icons.roofing),
+            icon: Icon(_showRoof ? Icons.roofing : Icons.roofing_outlined),
           ),
           IconButton(
             tooltip: 'Сбросить вид',
@@ -83,6 +98,7 @@ class _FrameVisualizationScreenState extends State<FrameVisualizationScreen> {
                       zoom: _zoom,
                       pan: _pan,
                       showRoof: _showRoof,
+                      showWalls: _showWalls,
                     ),
                     size: Size.infinite,
                   ),
