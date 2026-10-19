@@ -121,15 +121,12 @@ class FramePainter extends CustomPainter {
     final battenColor = const Color(0xFFA67B52);
     final ridgeColor = const Color(0xFF9E6A40);
 
-    // Отрисовка нижней обвязки (ростверка)
     void drawBottomPlate(double x, double z, double w, double d) {
       if (params.bottomPlateType == BottomPlateType.solid) {
-        addBox(x, 0, z, w, 0.150, d, wood); // Монолит 150х150
+        addBox(x, 0.0, z, w, 0.150, d, wood);
       } else {
-        // Пакет из 3-х досок
         final boardH = params.plates.actualHeightMm / 1000.0;
-        final boardW = params.plates.actualWidthMm / 1000.0;
-        addBox(x, 0, z, w, boardH, d, wood);
+        addBox(x, 0.0, z, w, boardH, d, wood);
         addBox(x, boardH, z, w, boardH, d, wood);
         addBox(x, boardH * 2, z, w, boardH, d, wood);
       }
@@ -138,11 +135,11 @@ class FramePainter extends CustomPainter {
     bool isOpening(double pos, WallSide wall) {
       final wallOpenings = params.openings.where((o) => o.wall == wall).toList();
       if (wallOpenings.isEmpty) return false;
-      double currentX = 0;
+      double currentX = 0.0;
       final wallLen = (wall == WallSide.front || wall == WallSide.back) ? L : W;
       for (final op in wallOpenings) {
-        final wM = op.widthMm / 1000;
-        final gap = (wallLen - wallOpenings.fold<double>(0, (s, o) => s + (o.widthMm / 1000) * o.quantity)) / (wallOpenings.fold<int>(0, (s, o) => s + o.quantity) + 1);
+        final wM = op.widthMm / 1000.0;
+        final gap = (wallLen - wallOpenings.fold<double>(0.0, (s, o) => s + (o.widthMm / 1000.0) * o.quantity)) / (wallOpenings.fold<int>(0, (s, o) => s + o.quantity) + 1);
         for (int i = 0; i < op.quantity; i++) {
           currentX += gap;
           if (pos >= currentX - 0.01 && pos <= currentX + wM + 0.01) return true;
@@ -153,24 +150,29 @@ class FramePainter extends CustomPainter {
     }
 
     void drawFraming(WallSide wall, double pos, Opening op) {
-      final wM = op.widthMm / 1000;
-      final hM = op.heightMm / 1000;
-      final sillM = op.sillHeightMm / 1000;
+      final wM = op.widthMm / 1000.0;
+      final hM = op.heightMm / 1000.0;
+      final sillM = op.sillHeightMm / 1000.0;
+      
       if (wall == WallSide.front || wall == WallSide.back) {
-        final z = wall == WallSide.front ? 0 : W - pW;
+        final z = wall == WallSide.front ? 0.0 : W - pW; // <-- Исправлено на 0.0
         addBox(pos, sillM + hM, z, wM, pH, pW, studColor);
-        if (op.type == OpeningType.window) addBox(pos, sillM, z, wM, pH, pW, studColor);
+        if (op.type == OpeningType.window) {
+          addBox(pos, sillM, z, wM, pH, pW, studColor);
+        }
       } else {
-        final x = wall == WallSide.left ? 0 : L - pW;
+        final x = wall == WallSide.left ? 0.0 : L - pW; // <-- Исправлено на 0.0
         addBox(x, sillM + hM, pos, pW, pH, wM, studColor);
-        if (op.type == OpeningType.window) addBox(x, sillM, pos, pW, pH, wM, studColor);
+        if (op.type == OpeningType.window) {
+          addBox(x, sillM, pos, pW, pH, wM, studColor);
+        }
       }
     }
 
     if (dim.isAFrame) {
-      drawBottomPlate(0, 0, L, pW);
-      drawBottomPlate(0, W - pW, L, pW);
-      drawBottomPlate(0, pW, pW, W - 2 * pW);
+      drawBottomPlate(0.0, 0.0, L, pW);
+      drawBottomPlate(0.0, W - pW, L, pW);
+      drawBottomPlate(0.0, pW, pW, W - 2 * pW);
       drawBottomPlate(L - pW, pW, pW, W - 2 * pW);
 
       for (double x = pW * 2; x < L - pW; x += spacing) {
@@ -178,66 +180,62 @@ class FramePainter extends CustomPainter {
       }
       final midZ = W / 2;
       for (double x = pW; x <= L - 0.1; x += spacing) {
-        addRafter(x, 0, 0, ridge, midZ, rW, rH, roofColor);
-        addRafter(x, 0, W, ridge, midZ, rW, rH, roofColor);
+        addRafter(x, 0.0, 0.0, ridge, midZ, rW, rH, roofColor);
+        addRafter(x, 0.0, W, ridge, midZ, rW, rH, roofColor);
       }
-      addBox(0, ridge - rH / 2, midZ - rW / 2, L, rH, rW, ridgeColor);
+      addBox(0.0, ridge - rH / 2, midZ - rW / 2, L, rH, rW, ridgeColor);
     } else {
-      // 1. Лаги пола (внутри обвязки)
       for (double x = pW * 2; x < L - pW; x += spacing) {
         addBox(x, pH, pW, jW, jH, W - 2 * pW, joistColor);
       }
 
-      // 2. Ростверк
-      drawBottomPlate(0, 0, L, pW);
-      drawBottomPlate(0, W - pW, L, pW);
-      drawBottomPlate(0, pW, pW, W - 2 * pW);
+      drawBottomPlate(0.0, 0.0, L, pW);
+      drawBottomPlate(0.0, W - pW, L, pW);
+      drawBottomPlate(0.0, pW, pW, W - 2 * pW);
       drawBottomPlate(L - pW, pW, pW, W - 2 * pW);
 
-      // 3. Стойки и проемы (Перед/Зад)
       for (final wall in [WallSide.front, WallSide.back]) {
-        final z = wall == WallSide.front ? 0 : W - sW;
+        final z = wall == WallSide.front ? 0.0 : W - sW; // <-- Исправлено на 0.0
         for (double x = pW; x < L - 0.1; x += spacing) {
           if (!isOpening(x, wall)) addBox(x, pH, z, sW, H - pH * 2, sW, studColor);
         }
         final wallOpenings = params.openings.where((o) => o.wall == wall).toList();
-        double currentX = 0;
-        final gap = (L - wallOpenings.fold<double>(0, (s, o) => s + (o.widthMm / 1000) * o.quantity)) / (wallOpenings.fold<int>(0, (s, o) => s + o.quantity) + 1);
+        double currentX = 0.0;
+        final gap = (L - wallOpenings.fold<double>(0.0, (s, o) => s + (o.widthMm / 1000.0) * o.quantity)) / (wallOpenings.fold<int>(0, (s, o) => s + o.quantity) + 1);
         for (final op in wallOpenings) {
           for (int i = 0; i < op.quantity; i++) {
             currentX += gap;
             drawFraming(wall, currentX, op);
-            currentX += op.widthMm / 1000;
+            currentX += op.widthMm / 1000.0;
           }
         }
       }
 
-      // 4. Стойки и проемы (Лево/Право)
       for (final wall in [WallSide.left, WallSide.right]) {
-        final x = wall == WallSide.left ? 0 : L - sW;
+        final x = wall == WallSide.left ? 0.0 : L - sW; // <-- Исправлено на 0.0
         for (double z = pW * 2; z < W - 0.1; z += spacing) {
           if (!isOpening(z, wall)) addBox(x, pH, z, sW, H - pH * 2, sW, studColor);
         }
         final wallOpenings = params.openings.where((o) => o.wall == wall).toList();
-        double currentZ = 0;
-        final gap = (W - wallOpenings.fold<double>(0, (s, o) => s + (o.widthMm / 1000) * o.quantity)) / (wallOpenings.fold<int>(0, (s, o) => s + o.quantity) + 1);
+        double currentZ = 0.0;
+        final gap = (W - wallOpenings.fold<double>(0.0, (s, o) => s + (o.widthMm / 1000.0) * o.quantity)) / (wallOpenings.fold<int>(0, (s, o) => s + o.quantity) + 1);
         for (final op in wallOpenings) {
           for (int i = 0; i < op.quantity; i++) {
             currentZ += gap;
             drawFraming(wall, currentZ, op);
-            currentZ += op.widthMm / 1000;
+            currentZ += op.widthMm / 1000.0;
           }
         }
       }
 
-      addBox(0, pH, 0, sW, H - pH * 2, sW, studColor);
-      addBox(L - sW, pH, 0, sW, H - pH * 2, sW, studColor);
-      addBox(0, pH, W - sW, sW, H - pH * 2, sW, studColor);
+      addBox(0.0, pH, 0.0, sW, H - pH * 2, sW, studColor);
+      addBox(L - sW, pH, 0.0, sW, H - pH * 2, sW, studColor);
+      addBox(0.0, pH, W - sW, sW, H - pH * 2, sW, studColor);
       addBox(L - sW, pH, W - sW, sW, H - pH * 2, sW, studColor);
 
-      addBox(0, H - pH, 0, L, pH, pW, wood);
-      addBox(0, H - pH, W - pW, L, pH, pW, wood);
-      addBox(0, H - pH, pW, pW, pH, W - 2 * pW, wood);
+      addBox(0.0, H - pH, 0.0, L, pH, pW, wood);
+      addBox(0.0, H - pH, W - pW, L, pH, pW, wood);
+      addBox(0.0, H - pH, pW, pW, pH, W - 2 * pW, wood);
       addBox(L - pW, H - pH, pW, pW, pH, W - 2 * pW, wood);
 
       if (showRoof) {
@@ -253,7 +251,7 @@ class FramePainter extends CustomPainter {
           addRafter(x, yStart, zLeft, ridgeY, midZ, rW, rH, roofColor);
           addRafter(x, yStart, zRight, ridgeY, midZ, rW, rH, roofColor);
         }
-        addBox(0, ridgeY - rH / 2, midZ - rW / 2, L, rH, rW, ridgeColor);
+        addBox(0.0, ridgeY - rH / 2, midZ - rW / 2, L, rH, rW, ridgeColor);
 
         final battenSpacingM = params.battenSpacingMm / 1000;
         final slopeLen = math.sqrt(math.pow(midZ - zLeft, 2) + math.pow(ridgeY - yStart, 2));
@@ -266,8 +264,8 @@ class FramePainter extends CustomPainter {
           final zR = zRight - (zRight - midZ) * t;
           final yR = yStart + (ridgeY - yStart) * t;
           
-          addBox(0, yL + rH, zL - bW/2, L, bH, bW, battenColor);
-          addBox(0, yR + rH, zR - bW/2, L, bH, bW, battenColor);
+          addBox(0.0, yL + rH, zL - bW/2, L, bH, bW, battenColor);
+          addBox(0.0, yR + rH, zR - bW/2, L, bH, bW, battenColor);
         }
       }
     }
