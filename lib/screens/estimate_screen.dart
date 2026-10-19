@@ -81,6 +81,23 @@ class _EstimateScreenState extends State<EstimateScreen> {
   }
 
   Future<void> _exportPdf() async {
+    String? name = widget.projectName;
+    if (name == null || name.isEmpty) {
+      final ctrl = TextEditingController(text: 'Моя смета');
+      name = await showDialog<String>(
+        context: context, 
+        builder: (ctx) => AlertDialog(
+          title: const Text('Название для PDF'), 
+          content: TextField(controller: ctrl, autofocus: true), 
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')), 
+            FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('ОК'))
+          ]
+        )
+      );
+      if (name == null || name.isEmpty) return;
+    }
+
     setState(() => _exporting = true);
     try {
       final fontData = await rootBundle.load('assets/fonts/Roboto-Regular.ttf');
@@ -108,7 +125,10 @@ class _EstimateScreenState extends State<EstimateScreen> {
         build: (ctx) => [
           pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
             pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [pw.Text('СМЕТА МАТЕРИАЛОВ', style: pw.TextStyle(font: boldFont, fontSize: 22)), pw.SizedBox(height: 4), pw.Text('KARKAS — проектирование домов', style: pw.TextStyle(font: baseFont, fontSize: 12, color: PdfColors.grey600))]),
-            pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [pw.Text(widget.projectName ?? 'Без названия', style: pw.TextStyle(font: boldFont, fontSize: 14)), pw.Text(DateTime.now().toString().split(' ')[0], style: pw.TextStyle(font: baseFont, fontSize: 10, color: PdfColors.grey600))])
+            pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
+              pw.Text(name!, style: pw.TextStyle(font: boldFont, fontSize: 14)), 
+              pw.Text(DateTime.now().toString().split(' ')[0], style: pw.TextStyle(font: baseFont, fontSize: 10, color: PdfColors.grey600))
+            ])
           ]),
           pw.SizedBox(height: 10), pw.Divider(color: PdfColors.grey400), pw.SizedBox(height: 10),
           if (widget.dimensions != null)
