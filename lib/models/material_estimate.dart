@@ -26,6 +26,8 @@ class MaterialEstimate {
   final double insulationThicknessMm;
   final double fastenersKg;
   final bool hasStonePlinth;
+  final int rostverkNailsCount;
+  final double rostverkNailsWeight;
 
   const MaterialEstimate({
     required this.lumber,
@@ -38,6 +40,8 @@ class MaterialEstimate {
     required this.insulationThicknessMm,
     required this.fastenersKg,
     this.hasStonePlinth = false,
+    this.rostverkNailsCount = 0,
+    this.rostverkNailsWeight = 0.0,
   });
 
   double get totalLumberMeters => lumber.fold(0.0, (s, e) => s + e.meters);
@@ -65,14 +69,26 @@ class MaterialEstimate {
 
     final plateThickness = plates.actualWidthMm / 1000.0;
     
-    // Размеры нижней обвязки (ростверка)
     final bottomPlateSec = bottomPlateType == BottomPlateType.solid ? kEdgedSections[3] : plates;
-    final bottomPlateMultiplier = bottomPlateType == BottomPlateType.solid ? 1 : 3;
+    final bottomPlateMultiplier = bottomPlateType == BottomPlateType.solid ? 1 : (bottomPlateType == BottomPlateType.pack3 ? 3 : 4);
     final bottomPlateThickness = bottomPlateSec.actualWidthMm / 1000.0;
+
+    // Расчет длины ростверка (периметр + центральные балки)
+    final centralBeamLength = d.centralBeamCount * (d.lengthM - 2 * bottomPlateThickness);
+    final totalGrillageLength = perimeter + centralBeamLength;
+
+    // Гвозди для пакета досок
+    int rostverkNails = 0;
+    double rostverkNailsKg = 0.0;
+    if (bottomPlateType != BottomPlateType.solid) {
+      final jointsCount = bottomPlateType == BottomPlateType.pack3 ? 2 : 3; // Кол-во швов
+      final nailsPerMeter = ((1000 / 300).ceil() * 2) * jointsCount; 
+      rostverkNails = (totalGrillageLength * nailsPerMeter).round();
+      rostverkNailsKg = rostverkNails * 0.007;
+    }
 
     double studMeters = 0;
     double topPlateMeters = 0;
-    double bottomPlateMeters = 0;
     double joistMeters = 0;
     double rafterMeters = 0;
     double battenMeters = 0;
@@ -91,7 +107,6 @@ class MaterialEstimate {
       final avgHeight = d.ridgeRise / 2;
       studMeters = frontStudsCount * avgHeight * 2;
       
-      bottomPlateMeters = perimeter * bottomPlateMultiplier;
       topPlateMeters = perimeter;
       
       joistMeters = ((d.lengthM - bottomPlateThickness * 2) / spacingM).ceil() * (d.widthM - bottomPlateThickness * 2);
@@ -107,7 +122,6 @@ class MaterialEstimate {
       final studCount = (perimeter * d.floors / spacingM).ceil();
       studMeters = studCount * d.wallHeightM;
       
-      bottomPlateMeters = perimeter * bottomPlateMultiplier;
       topPlateMeters = perimeter * d.floors;
       
       final joistRows = (d.lengthM / spacingM).ceil();
@@ -148,7 +162,7 @@ class MaterialEstimate {
           LumberItem('Стойки', studs, studMeters, count: (perimeter * d.floors / spacingM).ceil(), pieceLengthM: d.wallHeightM),
           LumberItem('Стропила', rafters, rafterMeters, count: ((d.lengthM / spacingM).ceil() + 1) * 2, pieceLengthM: slopeWithOverhang),
         ],
-        LumberItem('Ростверк (нижняя)', bottomPlateSec, bottomPlateMeters, count: 4 * bottomPlateMultiplier, pieceLengthM: 0),
+        LumberItem('Ростверк (нижняя)', bottomPlateSec, totalGrillageLength * bottomPlateMultiplier, count: (4 + d.centralBeamCount * 2) * bottomPlateMultiplier, pieceLengthM: 0),
         LumberItem('Обвязка (верхняя)', plates, topPlateMeters, count: 4 * d.floors, pieceLengthM: 0),
         LumberItem('Лаги', joists, joistMeters, count: (d.lengthM / spacingM).ceil() * d.floors, pieceLengthM: d.widthM),
         LumberItem('Обрешётка', batten, battenMeters),
@@ -164,6 +178,8 @@ class MaterialEstimate {
       insulationThicknessMm: insulationThicknessMm,
       fastenersKg: fastenersKg,
       hasStonePlinth: hasStonePlinth,
+      rostverkNailsCount: rostverkNails,
+      rostverkNailsWeight: rostverkNailsKg,
     );
   }
 }
