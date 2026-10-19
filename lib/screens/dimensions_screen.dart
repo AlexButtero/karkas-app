@@ -28,6 +28,7 @@ class _DimensionsScreenState extends State<DimensionsScreen> {
   late double _studSpacing;
   static const _presets = <double>[400, 500, 600];
   late bool _useCustomSpacing;
+  late int _centralBeams; // <-- НОВОЕ
 
   @override
   void initState() {
@@ -42,6 +43,7 @@ class _DimensionsScreenState extends State<DimensionsScreen> {
     
     _floors = d?.floors ?? 1;
     _studSpacing = d?.studSpacingMm ?? 600;
+    _centralBeams = d?.centralBeamCount ?? 0; // По умолчанию 0
     _useCustomSpacing = !_presets.contains(_studSpacing);
     _customSpacingCtrl = TextEditingController(text: _useCustomSpacing ? _fmt(_studSpacing, 0) : '');
   }
@@ -90,6 +92,7 @@ class _DimensionsScreenState extends State<DimensionsScreen> {
       lengthM: l, widthM: w, wallHeightM: isA ? 0 : h!,
       roofPitchDeg: p, floors: _floors, studSpacingMm: s,
       eaveOverhangM: isA ? 0 : e, groundClearanceM: g, isAFrame: isA,
+      centralBeamCount: _centralBeams, // <-- ПЕРЕДАЕМ В МОДЕЛЬ
     );
   }
 
@@ -159,6 +162,23 @@ class _DimensionsScreenState extends State<DimensionsScreen> {
                 selected: {_floors},
                 onSelectionChanged: isA ? null : (s) => setState(() => _floors = s.first),
               ),
+              const SizedBox(height: 24),
+
+              // НОВЫЙ БЛОК: Центральные балки
+              Text('Центральные балки ростверка', style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7))),
+              const SizedBox(height: 8),
+              SegmentedButton<int>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: 0, label: Text('Нет')),
+                  ButtonSegment(value: 1, label: Text('1')),
+                  ButtonSegment(value: 2, label: Text('2')),
+                ],
+                selected: {_centralBeams},
+                onSelectionChanged: (s) => setState(() => _centralBeams = s.first),
+              ),
+              const SizedBox(height: 4),
+              Text('Дополнительные балки по центру дома для лаг пола.', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
               const SizedBox(height: 24),
               
               Text('Шаг стоек каркаса, мм', style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7))),
