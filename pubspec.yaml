@@ -1,0 +1,26 @@
+name: karkas
+description: KARKAS — проектирование каркасных домов
+publish_to: 'none'
+version: 1.3.5+10
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  sqflite: ^2.4.1
+  path: ^1.9.0
+  pdf: ^3.11.1
+  printing: ^5.13.2
+  excel: ^4.0.6
+  share_plus: ^10.1.2
+  path_provider: ^2.1.5
+  shared_preferences: ^2.3.2
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/fonts/Roboto-Regular.ttf
+    - assets/fonts/Roboto-Bold.ttf
+    - assets/styles/
