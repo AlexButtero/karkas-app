@@ -130,6 +130,17 @@ class FramePainter extends CustomPainter {
     final ridgeColor = const Color(0xFF9E6A40);
 
     if (dim.isAFrame) {
+      // Нижняя обвязка
+      addBox(0, 0, 0, L, pH, pW, wood);
+      addBox(0, 0, W - pW, L, pH, pW, wood);
+      addBox(0, 0, pW, pW, pH, W - 2 * pW, wood);
+      addBox(L - pW, 0, pW, pW, pH, W - 2 * pW, wood);
+      
+      // Лаги пола
+      for (double x = pW * 2; x < L - pW; x += spacing) {
+        addBox(x, pH, pW, jW, jH, W - 2 * pW, joistColor);
+      }
+
       final midZ = W / 2;
       for (double x = pW; x <= L - 0.1; x += spacing) {
         addRafter(x, 0, 0, ridge, midZ, rW, rH, roofColor);
