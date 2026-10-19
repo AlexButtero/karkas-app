@@ -10,6 +10,7 @@ class HouseDimensions {
   final double eaveOverhangM;
   final double groundClearanceM;
   final bool isAFrame;
+  final int centralBeamCount; // <-- НОВОЕ: количество центральных балок
 
   const HouseDimensions({
     required this.lengthM,
@@ -21,6 +22,7 @@ class HouseDimensions {
     this.eaveOverhangM = 0.5,
     this.groundClearanceM = 0.15,
     this.isAFrame = false,
+    this.centralBeamCount = 0,
   });
 
   double get footprintArea => lengthM * widthM;
@@ -46,6 +48,7 @@ class HouseDimensions {
         'eaveOverhangM': eaveOverhangM,
         'groundClearanceM': groundClearanceM,
         'isAFrame': isAFrame,
+        'centralBeamCount': centralBeamCount,
       };
 
   factory HouseDimensions.fromJson(Map<String, dynamic> j) => HouseDimensions(
@@ -58,6 +61,7 @@ class HouseDimensions {
         eaveOverhangM: (j['eaveOverhangM'] as num?)?.toDouble() ?? 0.5,
         groundClearanceM: (j['groundClearanceM'] as num?)?.toDouble() ?? 0.15,
         isAFrame: j['isAFrame'] as bool? ?? false,
+        centralBeamCount: j['centralBeamCount'] as int? ?? 0,
       );
 }
 
