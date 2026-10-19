@@ -28,15 +28,7 @@ class StyleGuideScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Image.asset(
-                      style.imagePath,
-                      height: 180,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        height: 180, color: Colors.grey, child: const Center(child: Text('Нет фото')),
-                      ),
-                    ),
+                    _buildImage(style.imagePath, 180),
                     Padding(
                       padding: const EdgeInsets.all(16),
                       child: Row(
@@ -65,6 +57,33 @@ class StyleGuideScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildImage(String path, double height) {
+    return Image.asset(
+      path,
+      height: height,
+      width: double.infinity,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        String pngPath = path;
+        if (path.endsWith('.jpg')) {
+          pngPath = path.replaceAll('.jpg', '.png');
+        }
+        
+        return Image.asset(
+          pngPath,
+          height: height,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            height: height, 
+            color: Colors.grey, 
+            child: const Center(child: Text('Нет фото', style: TextStyle(color: Colors.white))),
+          ),
+        );
+      },
+    );
+  }
+
   void _showStyle(BuildContext context, HouseStyle style) {
     showModalBottomSheet(
       context: context,
@@ -81,7 +100,7 @@ class StyleGuideScreen extends StatelessWidget {
           children: [
             Stack(
               children: [
-                Image.asset(style.imagePath, height: 220, width: double.infinity, fit: BoxFit.cover),
+                _buildImage(style.imagePath, 220),
                 Positioned(
                   top: 16, right: 16,
                   child: CircleAvatar(
