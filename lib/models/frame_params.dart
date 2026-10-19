@@ -4,7 +4,8 @@ import 'opening.dart';
 
 enum BottomPlateType {
   solid('Брус 150×150'),
-  pack3('Пакет 3 доски');
+  pack3('Пакет 3 доски'),
+  pack4('Пакет 4 доски'); // <-- НОВОЕ
   final String label;
   const BottomPlateType(this.label);
 }
@@ -47,12 +48,16 @@ class FrameParams {
 
   LumberSection get bottomPlateSection {
     if (bottomPlateType == BottomPlateType.solid) {
-      return kEdgedSections[3]; // Брус 150х150
+      return kEdgedSections[3];
     }
-    return plates; // Используем выбранную доску (например 50х150)
+    return plates;
   }
 
-  int get bottomPlateMultiplier => bottomPlateType == BottomPlateType.solid ? 1 : 3;
+  int get bottomPlateMultiplier {
+    if (bottomPlateType == BottomPlateType.solid) return 1;
+    if (bottomPlateType == BottomPlateType.pack3) return 3;
+    return 4; // pack4
+  }
 
   Map<String, dynamic> toJson() => {
         'lumberType': lumberType.name,
