@@ -2,6 +2,13 @@ import 'lumber_section.dart';
 import 'house_dimensions.dart';
 import 'opening.dart';
 
+enum BottomPlateType {
+  solid('Брус 150×150'),
+  pack3('Пакет 3 доски');
+  final String label;
+  const BottomPlateType(this.label);
+}
+
 class FrameParams {
   final LumberMaterialType lumberType;
   final LumberSection studs;
@@ -15,6 +22,7 @@ class FrameParams {
   final InsulationType insulation;
   final double insulationThickness;
   final SheathingType sheathing;
+  final BottomPlateType bottomPlateType;
 
   FrameParams({
     this.lumberType = LumberMaterialType.edged,
@@ -29,12 +37,22 @@ class FrameParams {
     this.insulation = InsulationType.mineralWool,
     this.insulationThickness = 150,
     this.sheathing = SheathingType.osb9,
+    this.bottomPlateType = BottomPlateType.solid,
   })  : studs = studs ?? kEdgedSections[1],
         plates = plates ?? kEdgedSections[1],
         joists = joists ?? kEdgedSections[2],
         rafters = rafters ?? kEdgedSections[1],
         batten = batten ?? kEdgedBattens[0],
         counterBatten = counterBatten ?? kEdgedCounterBattens[0];
+
+  LumberSection get bottomPlateSection {
+    if (bottomPlateType == BottomPlateType.solid) {
+      return kEdgedSections[3]; // Брус 150х150
+    }
+    return plates; // Используем выбранную доску (например 50х150)
+  }
+
+  int get bottomPlateMultiplier => bottomPlateType == BottomPlateType.solid ? 1 : 3;
 
   Map<String, dynamic> toJson() => {
         'lumberType': lumberType.name,
@@ -49,6 +67,7 @@ class FrameParams {
         'insulation': insulation.name,
         'insulationThickness': insulationThickness,
         'sheathing': sheathing.name,
+        'bottomPlateType': bottomPlateType.name,
       };
 
   factory FrameParams.fromJson(Map<String, dynamic> j) {
@@ -58,9 +77,7 @@ class FrameParams {
     }
 
     return FrameParams(
-      lumberType: j['lumberType'] != null
-          ? LumberMaterialType.values.byName(j['lumberType'] as String)
-          : LumberMaterialType.edged,
+      lumberType: j['lumberType'] != null ? LumberMaterialType.values.byName(j['lumberType'] as String) : LumberMaterialType.edged,
       studs: parseSection(j['studs']),
       plates: parseSection(j['plates']),
       joists: parseSection(j['joists']),
@@ -72,6 +89,7 @@ class FrameParams {
       insulation: InsulationType.values.byName(j['insulation'] as String),
       insulationThickness: (j['insulationThickness'] as num).toDouble(),
       sheathing: SheathingType.values.byName(j['sheathing'] as String),
+      bottomPlateType: j['bottomPlateType'] != null ? BottomPlateType.values.byName(j['bottomPlateType'] as String) : BottomPlateType.solid,
     );
   }
 }
