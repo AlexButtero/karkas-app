@@ -37,6 +37,7 @@ class _FrameScreenState extends State<FrameScreen> {
   late InsulationType _ins;
   late double _insT;
   late SheathingType _sheath;
+  late BottomPlateType _bpType;
 
   @override
   void initState() {
@@ -46,6 +47,7 @@ class _FrameScreenState extends State<FrameScreen> {
     _studs = p.studs; _plates = p.plates; _joists = p.joists; _rafters = p.rafters;
     _batten = p.batten; _cBatten = p.counterBatten; _battenSpacing = p.battenSpacingMm;
     _ins = p.insulation; _insT = p.insulationThickness; _sheath = p.sheathing;
+    _bpType = p.bottomPlateType;
     _openings = p.openings.isEmpty ? Opening.defaults() : List.of(p.openings);
   }
 
@@ -53,6 +55,7 @@ class _FrameScreenState extends State<FrameScreen> {
         lumberType: _lt, studs: _studs, plates: _plates, joists: _joists, rafters: _rafters,
         batten: _batten, counterBatten: _cBatten, battenSpacingMm: _battenSpacing,
         openings: _openings, insulation: _ins, insulationThickness: _insT, sheathing: _sheath,
+        bottomPlateType: _bpType,
       );
 
   MaterialEstimate _calc() => MaterialEstimate.fromDimensions(
@@ -60,6 +63,7 @@ class _FrameScreenState extends State<FrameScreen> {
         studs: _studs, plates: _plates, joists: _joists, rafters: _rafters,
         batten: _batten, counterBatten: _cBatten, battenSpacingMm: _battenSpacing,
         openings: _openings, insulation: _ins, insulationThicknessMm: _insT,
+        bottomPlateType: _bpType,
       );
 
   void _changeType(LumberMaterialType t) {
@@ -139,10 +143,25 @@ class _FrameScreenState extends State<FrameScreen> {
                 _dd(context, 'Стропила (стены)', sectionsFor(_lt), _rafters, (v) => setState(() => _rafters = v)),
               ] else ...[
                 _dd(context, 'Стойки', sectionsFor(_lt), _studs, (v) => setState(() => _studs = v)),
-                _dd(context, 'Обвязка', sectionsFor(_lt), _plates, (v) => setState(() => _plates = v)),
+                _dd(context, 'Обвязка (верхняя)', sectionsFor(_lt), _plates, (v) => setState(() => _plates = v)),
                 _dd(context, 'Стропила', sectionsFor(_lt), _rafters, (v) => setState(() => _rafters = v)),
               ],
               _dd(context, 'Лаги', sectionsFor(_lt), _joists, (v) => setState(() => _joists = v)),
+            ]),
+            const SizedBox(height: 12),
+
+            // НОВЫЙ БЛОК РОСТВЕРКА
+            _card(context, 'Нижняя обвязка (Ростверк)', [
+              SegmentedButton<BottomPlateType>(
+                showSelectedIcon: false,
+                segments: BottomPlateType.values.map((t) => ButtonSegment(value: t, label: Text(t.label))).toList(),
+                selected: {_bpType},
+                onSelectionChanged: (s) => setState(() => _bpType = s.first),
+              ),
+              if (_bpType == BottomPlateType.pack3) ...[
+                const SizedBox(height: 8),
+                Text('Используются 3 доски по сечению: ${_plates.displayLabel}', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary)),
+              ],
             ]),
             const SizedBox(height: 12),
 
