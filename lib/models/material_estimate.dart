@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'house_dimensions.dart';
 import 'lumber_section.dart';
 import 'opening.dart';
+import 'frame_params.dart';
 
 class LumberItem {
   final String name;
@@ -54,6 +55,7 @@ class MaterialEstimate {
     required List<Opening> openings,
     required InsulationType insulation,
     required double insulationThicknessMm,
+    required BottomPlateType bottomPlateType,
     bool hasStonePlinth = false,
   }) {
     final perimeter = d.perimeter;
@@ -61,11 +63,16 @@ class MaterialEstimate {
     final slopeBase = math.sqrt(math.pow(d.widthM / 2, 2) + math.pow(d.ridgeRise, 2));
     final slopeWithOverhang = slopeBase + d.eaveOverhangM;
 
-    // Толщина обвязки (для смещения лаг внутрь)
     final plateThickness = plates.actualWidthMm / 1000.0;
+    
+    // Размеры нижней обвязки (ростверка)
+    final bottomPlateSec = bottomPlateType == BottomPlateType.solid ? kEdgedSections[3] : plates;
+    final bottomPlateMultiplier = bottomPlateType == BottomPlateType.solid ? 1 : 3;
+    final bottomPlateThickness = bottomPlateSec.actualWidthMm / 1000.0;
 
     double studMeters = 0;
-    double plateMeters = 0;
+    double topPlateMeters = 0;
+    double bottomPlateMeters = 0;
     double joistMeters = 0;
     double rafterMeters = 0;
     double battenMeters = 0;
@@ -84,8 +91,10 @@ class MaterialEstimate {
       final avgHeight = d.ridgeRise / 2;
       studMeters = frontStudsCount * avgHeight * 2;
       
-      plateMeters = perimeter;
-      joistMeters = ((d.lengthM - plateThickness * 2) / spacingM).ceil() * (d.widthM - plateThickness * 2);
+      bottomPlateMeters = perimeter * bottomPlateMultiplier;
+      topPlateMeters = perimeter;
+      
+      joistMeters = ((d.lengthM - bottomPlateThickness * 2) / spacingM).ceil() * (d.widthM - bottomPlateThickness * 2);
       
       final battenSpacingM = battenSpacingMm / 1000;
       battenMeters = ((slopeBase / battenSpacingM).ceil() + 1) * d.lengthM * 2;
@@ -98,12 +107,11 @@ class MaterialEstimate {
       final studCount = (perimeter * d.floors / spacingM).ceil();
       studMeters = studCount * d.wallHeightM;
       
-      // Верхняя и нижняя обвязка
-      plateMeters = perimeter * 2 * d.floors;
+      bottomPlateMeters = perimeter * bottomPlateMultiplier;
+      topPlateMeters = perimeter * d.floors;
       
-      // Лаги пола (учитываем толщину обвязки)
       final joistRows = (d.lengthM / spacingM).ceil();
-      joistMeters = joistRows * (d.widthM - plateThickness * 2) * d.floors;
+      joistMeters = joistRows * (d.widthM - bottomPlateThickness * 2) * d.floors;
       
       final rafterRows = (d.lengthM / spacingM).ceil() + 1;
       rafterMeters = rafterRows * 2 * slopeWithOverhang;
@@ -118,14 +126,12 @@ class MaterialEstimate {
       roofArea = 2 * slopeWithOverhang * d.lengthM;
       floorArea = d.footprintArea * d.floors;
 
-      // Обрамление проемов
       for (final o in openings) {
-        final headerLen = (o.widthMm + 100) / 1000; // +2 стойки по 50мм
+        final headerLen = (o.widthMm + 100) / 1000;
         final jackLen = o.heightMm / 1000;
         final sillLen = (o.widthMm + 100) / 1000;
-        
         framingMeters += (headerLen + 2 * jackLen + (o.type == OpeningType.window ? sillLen : 0)) * o.quantity;
-        framingCount += (o.type == OpeningType.window ? 4 : 3) * o.quantity; // Ригель, подоконник, 2 стойки
+        framingCount += (o.type == OpeningType.window ? 4 : 3) * o.quantity;
       }
     }
 
@@ -142,7 +148,8 @@ class MaterialEstimate {
           LumberItem('Стойки', studs, studMeters, count: (perimeter * d.floors / spacingM).ceil(), pieceLengthM: d.wallHeightM),
           LumberItem('Стропила', rafters, rafterMeters, count: ((d.lengthM / spacingM).ceil() + 1) * 2, pieceLengthM: slopeWithOverhang),
         ],
-        LumberItem('Обвязка', plates, plateMeters, count: 4 * d.floors, pieceLengthM: 0), // 4 стороны
+        LumberItem('Ростверк (нижняя)', bottomPlateSec, bottomPlateMeters, count: 4 * bottomPlateMultiplier, pieceLengthM: 0),
+        LumberItem('Обвязка (верхняя)', plates, topPlateMeters, count: 4 * d.floors, pieceLengthM: 0),
         LumberItem('Лаги', joists, joistMeters, count: (d.lengthM / spacingM).ceil() * d.floors, pieceLengthM: d.widthM),
         LumberItem('Обрешётка', batten, battenMeters),
         LumberItem('Контробрешётка', counterBatten, counterBattenMeters),
