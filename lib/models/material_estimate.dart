@@ -55,7 +55,12 @@ class MaterialEstimate {
     required LumberSection rafters,
     required LumberSection batten,
     required LumberSection counterBatten,
-    required int battenSpacingMm,
+    required LumberSection crossBattens,
+    required int wallSpacingMm,
+    required int floorSpacingMm,
+    required int roofSpacingMm,
+    required int wallInsSpacingMm,
+    required int roofInsSpacingMm,
     required List<Opening> openings,
     required InsulationType insulation,
     required double insulationThicknessMm,
@@ -63,111 +68,101 @@ class MaterialEstimate {
     bool hasStonePlinth = false,
   }) {
     final perimeter = d.perimeter;
-    final spacingM = d.studSpacingMm / 1000;
+    final wallSpacing = wallSpacingMm / 1000;
+    final floorSpacing = floorSpacingMm / 1000;
+    final roofSpacing = roofSpacingMm / 1000;
     final slopeBase = math.sqrt(math.pow(d.widthM / 2, 2) + math.pow(d.ridgeRise, 2));
     final slopeWithOverhang = slopeBase + d.eaveOverhangM;
 
     final plateThickness = plates.actualWidthMm / 1000.0;
-    
     final bottomPlateSec = bottomPlateType == BottomPlateType.solid ? kEdgedSections[3] : plates;
     final bottomPlateMultiplier = bottomPlateType == BottomPlateType.solid ? 1 : (bottomPlateType == BottomPlateType.pack3 ? 3 : 4);
     final bottomPlateThickness = bottomPlateSec.actualWidthMm / 1000.0;
 
-    // Расчет длины ростверка (периметр + центральные балки)
     final centralBeamLength = d.centralBeamCount * (d.lengthM - 2 * bottomPlateThickness);
     final totalGrillageLength = perimeter + centralBeamLength;
 
-    // Гвозди для пакета досок
     int rostverkNails = 0;
     double rostverkNailsKg = 0.0;
     if (bottomPlateType != BottomPlateType.solid) {
-      final jointsCount = bottomPlateType == BottomPlateType.pack3 ? 2 : 3; // Кол-во швов
+      final jointsCount = bottomPlateType == BottomPlateType.pack3 ? 2 : 3;
       final nailsPerMeter = ((1000 / 300).ceil() * 2) * jointsCount; 
       rostverkNails = (totalGrillageLength * nailsPerMeter).round();
       rostverkNailsKg = rostverkNails * 0.007;
     }
 
-    double studMeters = 0;
-    double topPlateMeters = 0;
-    double joistMeters = 0;
-    double rafterMeters = 0;
-    double battenMeters = 0;
-    double counterBattenMeters = 0;
-    double wallsArea = 0;
-    double roofArea = 0;
-    double floorArea = 0;
+    // --- РАСЧЕТ СТЕН ---
+    final wallStCount = (perimeter * d.floors / wallSpacing).ceil();
+    final wallStudMeters = wallStCount * d.wallHeightM;
+    
+    // Перекрестное утепление стен (горизонтальные доски)
+    final wallInsRows = d.floors * (d.wallHeightM / (wallInsSpacingMm / 1000)).ceil();
+    final wallInsMeters = wallInsRows * perimeter;
+
+    // --- РАСЧЕТ ПОЛОВ И ПЕРЕКРЫТИЙ ---
+    // Пол 1-го этажа + перекрытия 2-го и 3-го (если есть)
+    final floorLevels = d.floors; 
+    final joistRows = (d.lengthM / floorSpacing).ceil();
+    final joistMeters = joistRows * (d.widthM - bottomPlateThickness * 2) * floorLevels;
+
+    // Черновой пол (OSB или доска) - считаем по площади этажей
+    final draftFloorArea = d.footprintArea * floorLevels;
+
+    // --- РАСЧЕТ КРЫШИ ---
+    final rafterRows = (d.lengthM / roofSpacing).ceil() + 1;
+    final rafterMeters = rafterRows * 2 * slopeWithOverhang;
+
+    final battenSpacingM = roofSpacingMm / 1000;
+    final battenRows = (slopeWithOverhang / battenSpacingM).ceil() + 1;
+    final battenMeters = battenRows * d.lengthM * 2;
+    final counterBattenMeters = rafterRows * slopeWithOverhang * 2;
+
+    // Перекрестное утепление крыши (изнутри)
+    final roofInsRows = (slopeWithOverhang / (roofInsSpacingMm / 1000)).ceil();
+    final roofInsMeters = roofInsRows * d.lengthM * 2;
+
+    // --- ПЛОЩАДИ ---
+    final openingsArea = openings.fold<double>(0.0, (s, o) => s + o.areaM2);
+    final wallsArea = math.max(0.0, perimeter * d.wallHeightM * d.floors - openingsArea);
+    final roofArea = 2 * slopeWithOverhang * d.lengthM;
+    final floorArea = d.footprintArea * d.floors;
+
     double framingMeters = 0;
     int framingCount = 0;
-
-    if (d.isAFrame) {
-      final rafterCount = ((d.lengthM / spacingM).ceil() + 1) * 2;
-      rafterMeters = rafterCount * slopeBase;
-      
-      final frontStudsCount = (d.widthM / spacingM).ceil();
-      final avgHeight = d.ridgeRise / 2;
-      studMeters = frontStudsCount * avgHeight * 2;
-      
-      topPlateMeters = perimeter;
-      
-      joistMeters = ((d.lengthM - bottomPlateThickness * 2) / spacingM).ceil() * (d.widthM - bottomPlateThickness * 2);
-      
-      final battenSpacingM = battenSpacingMm / 1000;
-      battenMeters = ((slopeBase / battenSpacingM).ceil() + 1) * d.lengthM * 2;
-      counterBattenMeters = rafterMeters;
-
-      wallsArea = d.widthM * d.ridgeRise;
-      roofArea = 2 * slopeBase * d.lengthM;
-      floorArea = d.footprintArea;
-    } else {
-      final studCount = (perimeter * d.floors / spacingM).ceil();
-      studMeters = studCount * d.wallHeightM;
-      
-      topPlateMeters = perimeter * d.floors;
-      
-      final joistRows = (d.lengthM / spacingM).ceil();
-      joistMeters = joistRows * (d.widthM - bottomPlateThickness * 2) * d.floors;
-      
-      final rafterRows = (d.lengthM / spacingM).ceil() + 1;
-      rafterMeters = rafterRows * 2 * slopeWithOverhang;
-      
-      final battenSpacingM = battenSpacingMm / 1000;
-      final battenRows = (slopeWithOverhang / battenSpacingM).ceil() + 1;
-      battenMeters = battenRows * d.lengthM * 2;
-      counterBattenMeters = rafterRows * slopeWithOverhang * 2;
-
-      final openingsArea = openings.fold<double>(0.0, (s, o) => s + o.areaM2);
-      wallsArea = math.max(0.0, perimeter * d.wallHeightM * d.floors - openingsArea);
-      roofArea = 2 * slopeWithOverhang * d.lengthM;
-      floorArea = d.footprintArea * d.floors;
-
-      for (final o in openings) {
-        final headerLen = (o.widthMm + 100) / 1000;
-        final jackLen = o.heightMm / 1000;
-        final sillLen = (o.widthMm + 100) / 1000;
-        framingMeters += (headerLen + 2 * jackLen + (o.type == OpeningType.window ? sillLen : 0)) * o.quantity;
-        framingCount += (o.type == OpeningType.window ? 4 : 3) * o.quantity;
-      }
+    for (final o in openings) {
+      final headerLen = (o.widthMm + 100) / 1000;
+      final jackLen = o.heightMm / 1000;
+      final sillLen = (o.widthMm + 100) / 1000;
+      framingMeters += (headerLen + 2 * jackLen + (o.type == OpeningType.window ? sillLen : 0)) * o.quantity;
+      framingCount += (o.type == OpeningType.window ? 4 : 3) * o.quantity;
     }
 
     final sheathingArea = wallsArea + roofArea + floorArea;
     final osbSheets = (sheathingArea / 3.0).ceil();
-    final insulationVolume = (wallsArea + roofArea) * insulationThicknessMm / 1000;
+    
+    // Утеплитель: Стены + Крыша + Полы
+    final insulationVolume = (wallsArea + roofArea + draftFloorArea) * insulationThicknessMm / 1000;
     final fastenersKg = sheathingArea * 0.3;
 
     return MaterialEstimate(
       lumber: [
-        if (d.isAFrame) 
-          LumberItem('Стропила (стены)', rafters, rafterMeters, count: ((d.lengthM / spacingM).ceil() + 1) * 2, pieceLengthM: slopeBase)
-        else ...[
-          LumberItem('Стойки', studs, studMeters, count: (perimeter * d.floors / spacingM).ceil(), pieceLengthM: d.wallHeightM),
-          LumberItem('Стропила', rafters, rafterMeters, count: ((d.lengthM / spacingM).ceil() + 1) * 2, pieceLengthM: slopeWithOverhang),
-        ],
-        LumberItem('Ростверк (нижняя)', bottomPlateSec, totalGrillageLength * bottomPlateMultiplier, count: (4 + d.centralBeamCount * 2) * bottomPlateMultiplier, pieceLengthM: 0),
-        LumberItem('Обвязка (верхняя)', plates, topPlateMeters, count: 4 * d.floors, pieceLengthM: 0),
-        LumberItem('Лаги', joists, joistMeters, count: (d.lengthM / spacingM).ceil() * d.floors, pieceLengthM: d.widthM),
+        // Пиломатериалы
+        LumberItem('Стойки стен', studs, wallStudMeters, count: wallStCount, pieceLengthM: d.wallHeightM),
+        LumberItem('Лаги пола/перекрытий', joists, joistMeters, count: joistRows * floorLevels, pieceLengthM: d.widthM),
+        LumberItem('Стропила', rafters, rafterMeters, count: rafterRows * 2, pieceLengthM: slopeWithOverhang),
+        LumberItem('Ростверк (нижняя)', bottomPlateSec, totalGrillageLength * bottomPlateMultiplier, count: (4 + d.centralBeamCount * 2) * bottomPlateMultiplier),
+        LumberItem('Обвязка (верхняя)', plates, perimeter * d.floors, count: 4 * d.floors),
+        
+        // Перекрестное утепление
+        LumberItem('Обрешетка стен (перекр. утеп.)', crossBattens, wallInsMeters),
+        LumberItem('Обрешетка крыши (перекр. утеп.)', crossBattens, roofInsMeters),
+        
+        // Кровля
         LumberItem('Обрешётка', batten, battenMeters),
         LumberItem('Контробрешётка', counterBatten, counterBattenMeters),
-        if (!d.isAFrame) LumberItem('Обрамление', studs, framingMeters, count: framingCount),
+        
+        // Проемы
+        if (openings.isNotEmpty) LumberItem('Обрамление проёмов', studs, framingMeters, count: framingCount),
       ],
       wallsArea: wallsArea,
       roofArea: roofArea,
