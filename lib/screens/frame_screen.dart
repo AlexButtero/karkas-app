@@ -31,7 +31,7 @@ class FrameScreen extends StatefulWidget {
 class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStateMixin {
   late LumberMaterialType _lt;
   late LumberSection _studs, _plates, _joists, _rafters;
-  late LumberSection _batten, _cBatten;
+  late LumberSection _batten, _cBatten, _crossBatten;
   
   late int _wallSpacing, _floorSpacing, _roofSpacing;
   late int _wallInsSpacing, _roofInsSpacing;
@@ -51,12 +51,14 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
     final p = widget.initialParams ?? FrameParams();
     _lt = p.lumberType;
     _studs = p.studs; _plates = p.plates; _joists = p.joists; _rafters = p.rafters;
-    _batten = p.batten; _cBatten = p.counterBatten;
+    _batten = p.batten; _cBatten = p.counterBatten; _crossBatten = p.crossBattens;
+    
     _wallSpacing = p.wallStudSpacingMm;
     _floorSpacing = p.floorJoistSpacingMm;
     _roofSpacing = p.roofRafterSpacingMm;
     _wallInsSpacing = p.wallCrossInsulationSpacingMm;
     _roofInsSpacing = p.roofCrossInsulationSpacingMm;
+    
     _ins = p.insulation; _insT = p.insulationThickness; _sheath = p.sheathing;
     _bpType = p.bottomPlateType;
     _openings = p.openings.isEmpty ? Opening.defaults() : List.of(p.openings);
@@ -70,7 +72,7 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
 
   FrameParams _params() => FrameParams(
         lumberType: _lt, studs: _studs, plates: _plates, joists: _joists, rafters: _rafters,
-        batten: _batten, counterBatten: _cBatten,
+        batten: _batten, counterBatten: _cBatten, crossBattens: _crossBatten,
         wallStudSpacingMm: _wallSpacing, floorJoistSpacingMm: _floorSpacing, roofRafterSpacingMm: _roofSpacing,
         wallCrossInsulationSpacingMm: _wallInsSpacing, roofCrossInsulationSpacingMm: _roofInsSpacing,
         openings: _openings, insulation: _ins, insulationThickness: _insT, sheathing: _sheath,
@@ -80,7 +82,9 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
   MaterialEstimate _calc() => MaterialEstimate.fromDimensions(
         widget.dimensions,
         studs: _studs, plates: _plates, joists: _joists, rafters: _rafters,
-        batten: _batten, counterBatten: _cBatten, battenSpacingMm: _roofSpacing,
+        batten: _batten, counterBatten: _cBatten, crossBattens: _crossBatten,
+        wallSpacingMm: _wallSpacing, floorSpacingMm: _floorSpacing, roofSpacingMm: _roofSpacing,
+        wallInsSpacingMm: _wallInsSpacing, roofInsSpacingMm: _roofInsSpacing,
         openings: _openings, insulation: _ins, insulationThicknessMm: _insT,
         bottomPlateType: _bpType,
       );
@@ -91,7 +95,7 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Проектирование каркаса'),
+        title: const Text('Каркас дома'),
         actions: [
           IconButton(
             icon: const Icon(Icons.view_in_ar_outlined),
@@ -121,13 +125,13 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
         child: TabBarView(
           controller: _tabController,
           children: [
-            _buildGrillageTab(context),
-            _buildFloorsTab(context),
-            _buildWallsTab(context),
-            _buildCeilingsTab(context),
-            _buildPartitionsTab(context),
-            _buildAtticTab(context),
-            _buildRoofTab(context),
+            _buildGrillageTab(),
+            _buildFloorsTab(),
+            _buildWallsTab(),
+            _buildCeilingsTab(),
+            _buildPartitionsTab(),
+            _buildAtticTab(),
+            _buildRoofTab(),
           ],
         ),
       ),
@@ -149,12 +153,12 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
     );
   }
 
-  // --- ВКЛАДКА 1: РОСТВЕРК ---
-  Widget _buildGrillageTab(BuildContext context) {
+  // --- 1. РОСТВЕРК ---
+  Widget _buildGrillageTab() {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _card(context, 'Нижняя обвязка (Ростверк)', [
+        _card('Нижняя обвязка (Ростверк)', [
           SegmentedButton<BottomPlateType>(
             showSelectedIcon: false,
             segments: BottomPlateType.values.map((t) => ButtonSegment(value: t, label: Text(t.label))).toList(),
@@ -166,45 +170,44 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
             Text('Доски для пакета: ${_plates.displayLabel}', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary)),
           ],
         ]),
-        const SizedBox(height: 12),
-        _card(context, 'Центральные балки', [
+        _card('Центральные балки', [
           Text('Количество балок: ${widget.dimensions.centralBeamCount}', style: const TextStyle(fontWeight: FontWeight.w600)),
         ]),
       ],
     );
   }
 
-  // --- ВКЛАДКА 2: ПОЛЫ ---
-  Widget _buildFloorsTab(BuildContext context) {
+  // --- 2. ПОЛЫ ---
+  Widget _buildFloorsTab() {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _card(context, 'Лаги пола', [
-          _dd(context, 'Сечение лаг', sectionsFor(_lt), _joists, (v) => setState(() => _joists = v)),
+        _card('Лаги и Черновой пол', [
+          _dd('Сечение лаг', sectionsFor(_lt), _joists, (v) => setState(() => _joists = v)),
           const SizedBox(height: 12),
-          _spacingSelector(context, 'Шаг лаг', _floorSpacing, (v) => setState(() => _floorSpacing = v)),
+          _spacingSelector('Шаг лаг', _floorSpacing, (v) => setState(() => _floorSpacing = v)),
         ]),
-        const SizedBox(height: 12),
-        _card(context, 'Перекрёстное утепление пола', [
-          _spacingSelector(context, 'Шаг досок под утепление', _wallInsSpacing, (v) => setState(() => _wallInsSpacing = v)),
+        _card('Перекрёстное утепление пола', [
+          _dd('Сечение досок (поперёк)', battensFor(_lt), _crossBatten, (v) => setState(() => _crossBatten = v)),
+          const SizedBox(height: 12),
+          _spacingSelector('Шаг досок утепления', _wallInsSpacing, (v) => setState(() => _wallInsSpacing = v)),
         ]),
       ],
     );
   }
 
-  // --- ВКЛАДКА 3: СТЕНЫ ---
-  Widget _buildWallsTab(BuildContext context) {
+  // --- 3. СТЕНЫ ---
+  Widget _buildWallsTab() {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _card(context, 'Стойки и обвязка', [
-          _dd(context, 'Стойки', sectionsFor(_lt), _studs, (v) => setState(() => _studs = v)),
-          _dd(context, 'Верхняя обвязка', sectionsFor(_lt), _plates, (v) => setState(() => _plates = v)),
+        _card('Стойки и обвязка', [
+          _dd('Стойки', sectionsFor(_lt), _studs, (v) => setState(() => _studs = v)),
+          _dd('Верхняя обвязка', sectionsFor(_lt), _plates, (v) => setState(() => _plates = v)),
           const SizedBox(height: 12),
-          _spacingSelector(context, 'Шаг стоек', _wallSpacing, (v) => setState(() => _wallSpacing = v)),
+          _spacingSelector('Шаг стоек', _wallSpacing, (v) => setState(() => _wallSpacing = v)),
         ]),
-        const SizedBox(height: 12),
-        _card(context, 'Проёмы (окна/двери)', [
+        _card('Проёмы (окна/двери)', [
           ..._openings.map((op) => ListTile(
             contentPadding: EdgeInsets.zero,
             title: Text(op.displayLabel, style: const TextStyle(fontSize: 14)),
@@ -213,56 +216,74 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
           )),
           OutlinedButton.icon(onPressed: () => _editOpening(null), icon: const Icon(Icons.add), label: const Text('Добавить проём')),
         ]),
-        const SizedBox(height: 12),
-        _card(context, 'Перекрёстное утепление стен', [
-          _spacingSelector(context, 'Шаг досок (наружнее/внутреннее)', _wallInsSpacing, (v) => setState(() => _wallInsSpacing = v)),
+        _card('Перекрёстное утепление стен', [
+          _dd('Сечение досок (поперёк)', battensFor(_lt), _crossBatten, (v) => setState(() => _crossBatten = v)),
+          const SizedBox(height: 12),
+          _spacingSelector('Шаг досок (нар./внутр.)', _wallInsSpacing, (v) => setState(() => _wallInsSpacing = v)),
         ]),
       ],
     );
   }
 
-  // --- ВКЛАДКА 4: ПЕРЕКРЫТИЯ ---
-  Widget _buildCeilingsTab(BuildContext context) {
-    return Center(child: Text('Настройки перекрытий 2-го и 3-го этажа (в разработке)', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))));
-  }
-
-  // --- ВКЛАДКА 5: ПЕРЕГОРОДКИ ---
-  Widget _buildPartitionsTab(BuildContext context) {
-    return Center(child: Text('Настройки внутренних перегородок (в разработке)', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))));
-  }
-
-  // --- ВКЛАДКА 6: ЧЕРДАК ---
-  Widget _buildAtticTab(BuildContext context) {
+  // --- 4. ПЕРЕКРЫТИЯ ---
+  Widget _buildCeilingsTab() {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _card(context, 'Чердачное перекрытие', [
-          _spacingSelector(context, 'Шаг балок чердака', _floorSpacing, (v) => setState(() => _floorSpacing = v)),
-          const SizedBox(height: 12),
-          _spacingSelector(context, 'Шаг досок под утепление', _roofInsSpacing, (v) => setState(() => _roofInsSpacing = v)),
+        _card('Межэтажные перекрытия (2-3 этаж)', [
+          Text('Рассчитываются автоматически на основе лаг пола, если этажей > 1.', style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
         ]),
       ],
     );
   }
 
-  // --- ВКЛАДКА 7: КРЫША ---
-  Widget _buildRoofTab(BuildContext context) {
+  // --- 5. ПЕРЕГОРОДКИ ---
+  Widget _buildPartitionsTab() {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _card(context, 'Стропильная система', [
-          _dd(context, 'Стропила', sectionsFor(_lt), _rafters, (v) => setState(() => _rafters = v)),
+        _card('Внутренние перегородки', [
+          Text('В разработке. (Планируется расчет стоек 50х100 с обшивкой ГКЛ).', style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
+        ]),
+      ],
+    );
+  }
+
+  // --- 6. ЧЕРДАК ---
+  Widget _buildAtticTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _card('Чердачное перекрытие (верхняя обвязка)', [
+          _spacingSelector('Шаг балок чердака', _floorSpacing, (v) => setState(() => _floorSpacing = v)),
+        ]),
+        _card('Перекрёстное утепление чердака', [
+          _dd('Сечение досок (поперёк)', battensFor(_lt), _crossBatten, (v) => setState(() => _crossBatten = v)),
           const SizedBox(height: 12),
-          _spacingSelector(context, 'Шаг стропил', _roofSpacing, (v) => setState(() => _roofSpacing = v)),
+          _spacingSelector('Шаг досок утепления', _roofInsSpacing, (v) => setState(() => _roofInsSpacing = v)),
         ]),
-        const SizedBox(height: 12),
-        _card(context, 'Обрешётка и Кровля', [
-          _dd(context, 'Обрешётка', battensFor(_lt), _batten, (v) => setState(() => _batten = v)),
-          _dd(context, 'Контробрешётка', counterBattensFor(_lt), _cBatten, (v) => setState(() => _cBatten = v)),
+      ],
+    );
+  }
+
+  // --- 7. КРЫША ---
+  Widget _buildRoofTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _card('Стропильная система', [
+          _dd('Стропила', sectionsFor(_lt), _rafters, (v) => setState(() => _rafters = v)),
+          const SizedBox(height: 12),
+          _spacingSelector('Шаг стропил', _roofSpacing, (v) => setState(() => _roofSpacing = v)),
         ]),
-        const SizedBox(height: 12),
-        _card(context, 'Перекрёстное утепление крыши', [
-          _spacingSelector(context, 'Шаг досок изнутри', _roofInsSpacing, (v) => setState(() => _roofInsSpacing = v)),
+        _card('Обрешётка и Кровля', [
+          _dd('Обрешётка', battensFor(_lt), _batten, (v) => setState(() => _batten = v)),
+          _dd('Контробрешётка', counterBattensFor(_lt), _cBatten, (v) => setState(() => _cBatten = v)),
+        ]),
+        _card('Перекрёстное утепление крыши (изнутри)', [
+          _dd('Сечение досок', battensFor(_lt), _crossBatten, (v) => setState(() => _crossBatten = v)),
+          const SizedBox(height: 12),
+          _spacingSelector('Шаг досок', _roofInsSpacing, (v) => setState(() => _roofInsSpacing = v)),
         ]),
       ],
     );
@@ -287,19 +308,19 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
     });
   }
 
-  Widget _card(BuildContext c, String title, List<Widget> children) => Container(
+  Widget _card(String title, List<Widget> children) => Container(
     margin: const EdgeInsets.only(bottom: 12),
     padding: const EdgeInsets.all(16), 
-    decoration: BoxDecoration(color: Theme.of(c).colorScheme.surface, borderRadius: BorderRadius.circular(16)), 
+    decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(16)), 
     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)), const SizedBox(height: 12), ...children])
   );
   
-  Widget _dd(BuildContext c, String label, List<LumberSection> items, LumberSection current, ValueChanged<LumberSection> cb) => Padding(
+  Widget _dd(String label, List<LumberSection> items, LumberSection current, ValueChanged<LumberSection> cb) => Padding(
     padding: const EdgeInsets.only(bottom: 8), 
-    child: Row(children: [Expanded(child: Text(label)), DropdownButton<LumberSection>(value: current, dropdownColor: Theme.of(c).colorScheme.surface, items: items.map((s) => DropdownMenuItem(value: s, child: Text(s.displayLabel, style: const TextStyle(fontSize: 13)))).toList(), onChanged: (x) => x != null ? cb(x) : null)])
+    child: Row(children: [Expanded(child: Text(label)), DropdownButton<LumberSection>(value: current, dropdownColor: Theme.of(context).colorScheme.surface, items: items.map((s) => DropdownMenuItem(value: s, child: Text(s.displayLabel, style: const TextStyle(fontSize: 13)))).toList(), onChanged: (x) => x != null ? cb(x) : null)])
   );
 
-  Widget _spacingSelector(BuildContext c, String label, int current, ValueChanged<int> cb) {
+  Widget _spacingSelector(String label, int current, ValueChanged<int> cb) {
     final presets = [400, 500, 600];
     final useCustom = !presets.contains(current);
     final ctrl = TextEditingController(text: useCustom ? current.toString() : '');
@@ -307,7 +328,7 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: 13, color: Theme.of(c).colorScheme.onSurface.withValues(alpha: 0.7))),
+        Text(label, style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7))),
         const SizedBox(height: 8),
         SegmentedButton<int>(
           showSelectedIcon: false,
@@ -320,6 +341,7 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
             final v = s.first;
             if (v == -1) {
               if (ctrl.text.isEmpty) ctrl.text = current.toString();
+              setState(() {}); // Обновить UI для поля ввода
             } else {
               cb(v);
             }
