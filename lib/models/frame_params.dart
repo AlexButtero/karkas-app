@@ -60,18 +60,15 @@ class FrameParams {
         counterBatten = counterBatten ?? kEdgedCounterBattens[0],
         crossBattens = crossBattens ?? kEdgedBattens[0];
 
-  // --- ВОЗВРАЩАЕМ ГЕТТЕРЫ ДЛЯ РОСТВЕРКА ---
   LumberSection get bottomPlateSection {
-    if (bottomPlateType == BottomPlateType.solid) {
-      return kEdgedSections[3]; // Брус 150х150
-    }
+    if (bottomPlateType == BottomPlateType.solid) return kEdgedSections[3];
     return plates;
   }
 
   int get bottomPlateMultiplier {
     if (bottomPlateType == BottomPlateType.solid) return 1;
     if (bottomPlateType == BottomPlateType.pack3) return 3;
-    return 4; // pack4
+    return 4;
   }
 
   Map<String, dynamic> toJson() => {
