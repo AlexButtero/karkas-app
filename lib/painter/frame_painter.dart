@@ -40,7 +40,7 @@ class FramePainter extends CustomPainter {
     final cosYaw = math.cos(rotation);
     final sinYaw = math.sin(rotation);
 
-    // Вектор направления света (светит сверху, слева, спереди)
+    // Вектор направления света
     final lightDir = Vector3(-0.4, 0.8, -0.2).normalize();
 
     Offset project(double x, double y, double z) {
@@ -54,9 +54,9 @@ class FramePainter extends CustomPainter {
       return y * sinPitch + zr * cosPitch;
     }
 
-    // 1. РИСУЕМ СЕТКУ ПОЛА (Grid)
+    // Сетка пола
     final gridPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.08) // Чуть ярче для контраста
+      ..color = Colors.white.withValues(alpha: 0.08)
       ..strokeWidth = 1.0 * zoom;
     
     for (int i = -10; i <= 10; i++) {
@@ -88,7 +88,6 @@ class FramePainter extends CustomPainter {
       ];
 
       final cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, cz = (z1 + z2) / 2;
-      // Добавляем микро-смещение, чтобы избежать ряби (Z-fighting)
       final dep = depth(cx, cy, cz) + (w * h * d) * 0.001;
 
       for (final f in fDefs) {
@@ -159,7 +158,6 @@ class FramePainter extends CustomPainter {
     final cW = params.crossBattens.actualWidthMm / 1000.0;
     final cH = params.crossBattens.actualHeightMm / 1000.0;
 
-    // Естественные, чуть более светлые цвета дерева
     final wood = const Color(0xFFD4A373);       
     final woodDark = const Color(0xFFB58354);   
     final studColor = const Color(0xFFE0B588);  
@@ -169,37 +167,63 @@ class FramePainter extends CustomPainter {
     final ridgeColor = const Color(0xFF9E6A40); 
     final insColor = const Color(0xFFF0D080);   
 
-    final beamWidth = params.bottomPlateType == BottomPlateType.solid ? 0.150 : (params.plates.actualWidthMm / 1000.0 * params.bottomPlateMultiplier);
+    // Ширина ростверка (для смещения стен и пола) - это фактическая высота доски
+    final beamWidth = params.bottomPlateType == BottomPlateType.solid 
+        ? 0.150 
+        : (params.plates.actualHeightMm / 1000.0);
 
     if (showGrillage) {
-      void drawBeam(double x, double z, double len, double wid, {required bool alignX}) {
-        if (params.bottomPlateType == BottomPlateType.solid) {
-          addBox(x, 0, z, alignX ? len : wid, 0.150, alignX ? wid : len, wood);
-        } else {
-          final bw = params.plates.actualWidthMm / 1000.0;
-          final bh = params.plates.actualHeightMm / 1000.0;
-          final count = params.bottomPlateMultiplier;
+      if (params.bottomPlateType == BottomPlateType.solid) {
+        // Цельный брус 150х150
+        addBox(0.0, 0.0, 0.0, L, 0.150, beamWidth, wood);
+        addBox(0.0, 0.0, W - beamWidth, L, 0.150, beamWidth, wood);
+        addBox(0.0, 0.0, beamWidth, beamWidth, 0.150, W - 2 * beamWidth, wood);
+        addBox(L - beamWidth, 0.0, beamWidth, beamWidth, 0.150, W - 2 * beamWidth, wood);
+      } else {
+        // Пакет досок (Ёлочка)
+        final bw = params.plates.actualWidthMm / 1000.0; // Толщина доски (напр. 50мм)
+        final bh = params.plates.actualHeightMm / 1000.0; // Высота доски (напр. 150мм)
+        final count = params.bottomPlateMultiplier;
+        
+        for (int i = 0; i < count; i++) {
+          final color = i % 2 == 0 ? wood : woodDark;
+          final yOffset = i * bw; // Поднимаем каждый слой на толщину доски
+          final isXPass = (i % 2 == 0); // Четные слои: X проходит, нечетные: Z проходит
           
-          for (int i = 0; i < count; i++) {
-            final color = i % 2 == 0 ? wood : woodDark;
-            if (alignX) {
-              addBox(x, 0, z + i * bw, len, bh, bw, color);
-            } else {
-              addBox(x + i * bw, 0, z, bw, bh, len, color);
-            }
+          if (isXPass) {
+            // X (Передняя/Задняя) проходят насквозь
+            addBox(0.0, yOffset, 0.0, L, bw, bh, color); 
+            addBox(0.0, yOffset, W - bh, L, bw, bh, color);
+            // Z (Левая/Правая) упираются
+            addBox(0.0, yOffset, bh, bh, bw, W - 2 * bh, color);
+            addBox(L - bh, yOffset, bh, bh, bw, W - 2 * bh, color);
+          } else {
+            // Z (Левая/Правая) проходят насквозь
+            addBox(0.0, yOffset, 0.0, bh, bw, W, color);
+            addBox(L - bh, yOffset, 0.0, bh, bw, W, color);
+            // X (Передняя/Задняя) упираются
+            addBox(bh, yOffset, 0.0, L - 2 * bh, bw, bh, color);
+            addBox(bh, yOffset, W - bh, L - 2 * bh, bw, bh, color);
           }
         }
       }
 
-      drawBeam(0.0, 0.0, L, beamWidth, alignX: true);
-      drawBeam(0.0, W - beamWidth, L, beamWidth, alignX: true);
-      drawBeam(0.0, beamWidth, W - 2 * beamWidth, beamWidth, alignX: false);
-      drawBeam(L - beamWidth, beamWidth, W - 2 * beamWidth, beamWidth, alignX: false);
-
+      // Центральные балки
       if (dim.centralBeamCount > 0) {
         for (int i = 1; i <= dim.centralBeamCount; i++) {
           final zPos = W * (i / (dim.centralBeamCount + 1)) - beamWidth / 2;
-          drawBeam(beamWidth, zPos, L - 2 * beamWidth, beamWidth, alignX: true);
+          if (params.bottomPlateType == BottomPlateType.solid) {
+             addBox(beamWidth, 0.0, zPos, L - 2 * beamWidth, 0.150, beamWidth, wood);
+          } else {
+             final bw = params.plates.actualWidthMm / 1000.0;
+             final bh = params.plates.actualHeightMm / 1000.0;
+             final count = params.bottomPlateMultiplier;
+             for (int j = 0; j < count; j++) {
+               final color = j % 2 == 0 ? wood : woodDark;
+               final yOffset = j * bw;
+               addBox(beamWidth, yOffset, zPos, L - 2 * beamWidth, bw, bh, color);
+             }
+          }
         }
       }
     }
@@ -263,14 +287,12 @@ class FramePainter extends CustomPainter {
       }
     }
 
-    // 3. СОРТИРОВКА И ОТРИСОВКА
-    // Сортируем строго по глубине, чтобы передние грани рисовались поверх задних
     faces.sort((a, b) => b.depth.compareTo(a.depth));
 
     final fillPaint = Paint()..style = PaintingStyle.fill;
     final strokePaint = Paint()
       ..style = PaintingStyle.stroke
-      ..color = Colors.black.withValues(alpha: 0.15) // Мягкая обводка, не делает модель черной
+      ..color = Colors.black.withValues(alpha: 0.15)
       ..strokeWidth = 0.5;
 
     for (final f in faces) {
@@ -301,10 +323,8 @@ class FramePainter extends CustomPainter {
     }
   }
 
-  // Мягкое освещение (чтобы не было черных провалов)
   Color _applyLight(Color base, Vector3 normal, Vector3 lightDir) {
     final dot = normal.dot(lightDir);
-    // Базовый свет 0.6 (60% яркости) + направленный
     final intensity = 0.6 + 0.4 * math.max(0.0, dot);
     
     final r = (base.red * intensity).clamp(0, 255).toInt();
