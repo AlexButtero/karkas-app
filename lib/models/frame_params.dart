@@ -5,7 +5,7 @@ import 'opening.dart';
 enum BottomPlateType {
   solid('Брус 150×150'),
   pack3('Пакет 3 доски'),
-  pack4('Пакет 4 доски'); // <-- НОВОЕ
+  pack4('Пакет 4 доски');
   final String label;
   const BottomPlateType(this.label);
 }
@@ -18,7 +18,14 @@ class FrameParams {
   final LumberSection rafters;
   final LumberSection batten;
   final LumberSection counterBatten;
-  final int battenSpacingMm;
+  
+  // Шаги каркаса и утепления
+  final int wallStudSpacingMm;
+  final int floorJoistSpacingMm;
+  final int roofRafterSpacingMm;
+  final int wallCrossInsulationSpacingMm;
+  final int roofCrossInsulationSpacingMm;
+  
   final List<Opening> openings;
   final InsulationType insulation;
   final double insulationThickness;
@@ -33,7 +40,11 @@ class FrameParams {
     LumberSection? rafters,
     LumberSection? batten,
     LumberSection? counterBatten,
-    this.battenSpacingMm = 350,
+    this.wallStudSpacingMm = 600,
+    this.floorJoistSpacingMm = 600,
+    this.roofRafterSpacingMm = 600,
+    this.wallCrossInsulationSpacingMm = 400,
+    this.roofCrossInsulationSpacingMm = 400,
     this.openings = const [],
     this.insulation = InsulationType.mineralWool,
     this.insulationThickness = 150,
@@ -46,19 +57,6 @@ class FrameParams {
         batten = batten ?? kEdgedBattens[0],
         counterBatten = counterBatten ?? kEdgedCounterBattens[0];
 
-  LumberSection get bottomPlateSection {
-    if (bottomPlateType == BottomPlateType.solid) {
-      return kEdgedSections[3];
-    }
-    return plates;
-  }
-
-  int get bottomPlateMultiplier {
-    if (bottomPlateType == BottomPlateType.solid) return 1;
-    if (bottomPlateType == BottomPlateType.pack3) return 3;
-    return 4; // pack4
-  }
-
   Map<String, dynamic> toJson() => {
         'lumberType': lumberType.name,
         'studs': studs.toJson(),
@@ -67,7 +65,11 @@ class FrameParams {
         'rafters': rafters.toJson(),
         'batten': batten.toJson(),
         'counterBatten': counterBatten.toJson(),
-        'battenSpacingMm': battenSpacingMm,
+        'wallStudSpacingMm': wallStudSpacingMm,
+        'floorJoistSpacingMm': floorJoistSpacingMm,
+        'roofRafterSpacingMm': roofRafterSpacingMm,
+        'wallCrossInsulationSpacingMm': wallCrossInsulationSpacingMm,
+        'roofCrossInsulationSpacingMm': roofCrossInsulationSpacingMm,
         'openings': openings.map((o) => o.toJson()).toList(),
         'insulation': insulation.name,
         'insulationThickness': insulationThickness,
@@ -89,7 +91,11 @@ class FrameParams {
       rafters: parseSection(j['rafters']),
       batten: j['batten'] != null ? LumberSection.fromJson(j['batten'] as Map<String, dynamic>) : kEdgedBattens[0],
       counterBatten: j['counterBatten'] != null ? LumberSection.fromJson(j['counterBatten'] as Map<String, dynamic>) : kEdgedCounterBattens[0],
-      battenSpacingMm: j['battenSpacingMm'] as int? ?? 350,
+      wallStudSpacingMm: j['wallStudSpacingMm'] as int? ?? 600,
+      floorJoistSpacingMm: j['floorJoistSpacingMm'] as int? ?? 600,
+      roofRafterSpacingMm: j['roofRafterSpacingMm'] as int? ?? 600,
+      wallCrossInsulationSpacingMm: j['wallCrossInsulationSpacingMm'] as int? ?? 400,
+      roofCrossInsulationSpacingMm: j['roofCrossInsulationSpacingMm'] as int? ?? 400,
       openings: (j['openings'] as List).map((o) => Opening.fromJson(o as Map<String, dynamic>)).toList(),
       insulation: InsulationType.values.byName(j['insulation'] as String),
       insulationThickness: (j['insulationThickness'] as num).toDouble(),
