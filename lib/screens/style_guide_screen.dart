@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../data/project_repository.dart';
 import '../models/house_style.dart';
+import '../models/project.dart';
 import 'dimensions_screen.dart';
 
 class StyleGuideScreen extends StatelessWidget {
@@ -59,26 +61,12 @@ class StyleGuideScreen extends StatelessWidget {
 
   Widget _buildImage(String path, double height) {
     return Image.asset(
-      path,
-      height: height,
-      width: double.infinity,
-      fit: BoxFit.cover,
+      path, height: height, width: double.infinity, fit: BoxFit.cover,
       errorBuilder: (context, error, stackTrace) {
-        String pngPath = path;
-        if (path.endsWith('.jpg')) {
-          pngPath = path.replaceAll('.jpg', '.png');
-        }
-        
+        String pngPath = path.endsWith('.jpg') ? path.replaceAll('.jpg', '.png') : path;
         return Image.asset(
-          pngPath,
-          height: height,
-          width: double.infinity,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
-            height: height, 
-            color: Colors.grey, 
-            child: const Center(child: Text('Нет фото', style: TextStyle(color: Colors.white))),
-          ),
+          pngPath, height: height, width: double.infinity, fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(height: height, color: Colors.grey, child: const Center(child: Text('Нет фото', style: TextStyle(color: Colors.white)))),
         );
       },
     );
@@ -146,10 +134,43 @@ class StyleGuideScreen extends StatelessWidget {
                   SizedBox(
                     height: 52, width: double.infinity,
                     child: FilledButton(
-                      onPressed: () {
+                      onPressed: () async {
                         Navigator.pop(context);
+                        
+                        final ctrl = TextEditingController(text: 'Дом в стиле ${style.name}');
+                        final name = await showDialog<String>(
+                          context: context, 
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Название проекта'), 
+                            content: TextField(controller: ctrl, autofocus: true), 
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')), 
+                              FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Создать'))
+                            ]
+                          )
+                        );
+                        if (name == null || name.isEmpty) return;
+
+                        final now = DateTime.now();
+                        final newProject = Project(
+                          name: name,
+                          createdAt: now,
+                          updatedAt: now,
+                          dimensions: style.dimensions,
+                          frameParams: style.params,
+                          prices: {},
+                        );
+
+                        final id = await ProjectRepository.instance.insert(newProject);
+                        if (!context.mounted) return;
+
                         Navigator.push(context, MaterialPageRoute(
-                          builder: (_) => DimensionsScreen(style: style, initialDimensions: style.dimensions),
+                          builder: (_) => DimensionsScreen(
+                            style: style, 
+                            initialDimensions: style.dimensions,
+                            projectId: id,
+                            projectName: name,
+                          ),
                         ));
                       },
                       child: const Text('Создать проект в этом стиле'),
