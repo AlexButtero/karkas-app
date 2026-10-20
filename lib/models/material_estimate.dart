@@ -91,24 +91,21 @@ class MaterialEstimate {
       rostverkNailsKg = rostverkNails * 0.007;
     }
 
-    // --- РАСЧЕТ СТЕН ---
     final wallStCount = (perimeter * d.floors / wallSpacing).ceil();
     final wallStudMeters = wallStCount * d.wallHeightM;
     
-    // Перекрестное утепление стен (горизонтальные доски)
     final wallInsRows = d.floors * (d.wallHeightM / (wallInsSpacingMm / 1000)).ceil();
     final wallInsMeters = wallInsRows * perimeter;
 
-    // --- РАСЧЕТ ПОЛОВ И ПЕРЕКРЫТИЙ ---
-    // Пол 1-го этажа + перекрытия 2-го и 3-го (если есть)
-    final floorLevels = d.floors; 
     final joistRows = (d.lengthM / floorSpacing).ceil();
-    final joistMeters = joistRows * (d.widthM - bottomPlateThickness * 2) * floorLevels;
+    final joistLen = (d.widthM - bottomPlateThickness * 2);
+    
+    final joistMetersFloor1 = joistRows * joistLen;
+    final joistMetersUpper = joistRows * joistLen * (d.floors - 1);
+    final joistMetersAttic = joistRows * joistLen;
 
-    // Черновой пол (OSB или доска) - считаем по площади этажей
-    final draftFloorArea = d.footprintArea * floorLevels;
+    final draftFloorArea = d.footprintArea * d.floors;
 
-    // --- РАСЧЕТ КРЫШИ ---
     final rafterRows = (d.lengthM / roofSpacing).ceil() + 1;
     final rafterMeters = rafterRows * 2 * slopeWithOverhang;
 
@@ -117,11 +114,9 @@ class MaterialEstimate {
     final battenMeters = battenRows * d.lengthM * 2;
     final counterBattenMeters = rafterRows * slopeWithOverhang * 2;
 
-    // Перекрестное утепление крыши (изнутри)
     final roofInsRows = (slopeWithOverhang / (roofInsSpacingMm / 1000)).ceil();
     final roofInsMeters = roofInsRows * d.lengthM * 2;
 
-    // --- ПЛОЩАДИ ---
     final openingsArea = openings.fold<double>(0.0, (s, o) => s + o.areaM2);
     final wallsArea = math.max(0.0, perimeter * d.wallHeightM * d.floors - openingsArea);
     final roofArea = 2 * slopeWithOverhang * d.lengthM;
@@ -139,29 +134,27 @@ class MaterialEstimate {
 
     final sheathingArea = wallsArea + roofArea + floorArea;
     final osbSheets = (sheathingArea / 3.0).ceil();
-    
-    // Утеплитель: Стены + Крыша + Полы
     final insulationVolume = (wallsArea + roofArea + draftFloorArea) * insulationThicknessMm / 1000;
     final fastenersKg = sheathingArea * 0.3;
 
     return MaterialEstimate(
       lumber: [
-        // Пиломатериалы
         LumberItem('Стойки стен', studs, wallStudMeters, count: wallStCount, pieceLengthM: d.wallHeightM),
-        LumberItem('Лаги пола/перекрытий', joists, joistMeters, count: joistRows * floorLevels, pieceLengthM: d.widthM),
+        LumberItem('Лаги пола 1-го этажа', joists, joistMetersFloor1, count: joistRows, pieceLengthM: d.widthM),
+        if (d.floors > 1)
+          LumberItem('Лаги перекрытий 2+ эт.', joists, joistMetersUpper, count: joistRows * (d.floors - 1), pieceLengthM: d.widthM),
+        LumberItem('Балки чердака', joists, joistMetersAttic, count: joistRows, pieceLengthM: d.widthM),
+        
         LumberItem('Стропила', rafters, rafterMeters, count: rafterRows * 2, pieceLengthM: slopeWithOverhang),
         LumberItem('Ростверк (нижняя)', bottomPlateSec, totalGrillageLength * bottomPlateMultiplier, count: (4 + d.centralBeamCount * 2) * bottomPlateMultiplier),
         LumberItem('Обвязка (верхняя)', plates, perimeter * d.floors, count: 4 * d.floors),
         
-        // Перекрестное утепление
         LumberItem('Обрешетка стен (перекр. утеп.)', crossBattens, wallInsMeters),
         LumberItem('Обрешетка крыши (перекр. утеп.)', crossBattens, roofInsMeters),
         
-        // Кровля
         LumberItem('Обрешётка', batten, battenMeters),
         LumberItem('Контробрешётка', counterBatten, counterBattenMeters),
         
-        // Проемы
         if (openings.isNotEmpty) LumberItem('Обрамление проёмов', studs, framingMeters, count: framingCount),
       ],
       wallsArea: wallsArea,
