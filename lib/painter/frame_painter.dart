@@ -134,11 +134,10 @@ class FramePainter extends CustomPainter {
     final roofColor = const Color(0xFFB8855A);
     final battenColor = const Color(0xFFA67B52);
     final ridgeColor = const Color(0xFF9E6A40);
-    final insColor = const Color(0xFFFFD54F); // Цвет перекрестного утепления
+    final insColor = const Color(0xFFFFD54F);
 
     final beamWidth = params.bottomPlateType == BottomPlateType.solid ? 0.150 : (params.plates.actualWidthMm / 1000.0 * params.bottomPlateMultiplier);
 
-    // 1. РОСТВЕРК
     if (showGrillage) {
       void drawBeam(double x, double z, double len, double wid, {required bool alignX}) {
         if (params.bottomPlateType == BottomPlateType.solid) {
@@ -172,7 +171,6 @@ class FramePainter extends CustomPainter {
       }
     }
 
-    // 2. ПОЛЫ И ПЕРЕКРЫТИЯ
     if (showFloors) {
       for (int f = 0; f < dim.floors; f++) {
         final yPos = f * H + pH;
@@ -182,24 +180,18 @@ class FramePainter extends CustomPainter {
       }
     }
 
-    // 3. СТЕНЫ
     if (showWalls) {
       for (int f = 0; f < dim.floors; f++) {
         final yBase = f * H;
-        
-        // Стойки передние и задние
         for (double x = pW; x < L - 0.1; x += wallSpacing) {
           addBox(x, yBase + pH, 0.0, sW, H - pH * 2, sW, studColor);
           addBox(x, yBase + pH, W - sW, sW, H - pH * 2, sW, studColor);
         }
-        // Стойки боковые
         for (double z = pW * 2; z < W - 0.1; z += wallSpacing) {
           addBox(0.0, yBase + pH, z, sW, H - pH * 2, sW, studColor);
           addBox(L - sW, yBase + pH, z, sW, H - pH * 2, sW, studColor);
         }
-
-        // Перекрестное утепление (горизонтальные доски)
-        if (f == 0) { // Пока рисуем только для 1-го этажа, чтобы не перегружать
+        if (f == 0) {
           for (double y = pH + wallInsSpacing; y < H - pH; y += wallInsSpacing) {
             addBox(0, yBase + y, -cW, L, cH, cW, insColor);
             addBox(0, yBase + y, W, L, cH, cW, insColor);
@@ -208,7 +200,6 @@ class FramePainter extends CustomPainter {
       }
     }
 
-    // 4. КРЫША
     if (showRoof && showWalls) {
       final ridgeY = totalH + ridge;
       final midZ = W / 2;
@@ -224,7 +215,6 @@ class FramePainter extends CustomPainter {
       }
       addBox(0.0, ridgeY - rH / 2, midZ - rW / 2, L, rH, rW, ridgeColor);
 
-      // Перекрестное утепление крыши
       final slopeLen = math.sqrt(math.pow(midZ - zLeft, 2) + math.pow(ridgeY - yStart, 2));
       final roofInsCount = (slopeLen / roofInsSpacing).ceil();
       
