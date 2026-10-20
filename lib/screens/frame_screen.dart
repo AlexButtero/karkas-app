@@ -212,17 +212,7 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
             )),
           ),
         ),
-        const SizedBox(width: 8),
-        SizedBox(
-          height: 40,
-          width: 48,
-          child: IconButton.filledTonal(
-            icon: const Icon(Icons.save, size: 20),
-            tooltip: 'Сохранить',
-            onPressed: _manualSave,
-          ),
-        ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 12),
         Expanded(
           flex: 2,
           child: FilledButton.icon(
