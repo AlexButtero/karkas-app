@@ -9,26 +9,37 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           cache: true
-      - name: Generate Android scaffold
-        run: |
-          flutter create --org com.karkas --project-name karkas --platforms android /tmp/karkas_scaffold
-          cp -r /tmp/karkas_scaffold/android .
+
+      - name: Bootstrap Android wrapper
+        run: flutter create . --project-name karkas --org com.karkas --platforms android
+
+      # ДОБАВЛЕНО: Переименование приложения в KARKAS
+      - name: Rename App to KARKAS
+        run: sed -i 's/android:label="karkas"/android:label="KARKAS"/g' android/app/src/main/AndroidManifest.xml
+
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Generate App Icons
+        run: dart run flutter_launcher_icons
+
       - name: Build APK
         run: flutter build apk --release
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
