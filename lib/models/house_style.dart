@@ -61,8 +61,7 @@ class HouseStyle {
         joists: kDryPlanedSections[2],
         batten: kDryPlanedBattens[0],
         counterBatten: kDryPlanedCounterBattens[0],
-        // Убрали battenSpacingMm, так как в новой модели есть отдельные шаги.
-        // Шаг обрешётки теперь берется из roofRafterSpacingMm
+        crossBattens: kDryPlanedBattens[0],
         roofRafterSpacingMm: 350, 
         insulation: InsulationType.mineralWool,
         insulationThickness: insulationMm,
@@ -76,15 +75,13 @@ const kHouseStyles = <HouseStyle>[
     id: 'barnhouse', name: 'Барнхаус', tagline: 'Амбарный шик', description: 'Вытянутый объём, высокий фронтон и тёмный фасад.',
     tips: ['Соотношение сторон 1:2', 'Угол крыши 35–45°', 'Утепление 200 мм', 'Крыша без свесов (заподлицо)'],
     lengthM: 12, widthM: 6, wallHeightM: 3.2, roofPitchDeg: 40, floors: 1, insulationMm: 200,
-    sheathing: SheathingType.osb12, eaveOverhangM: 0.0,
-    imagePath: 'assets/styles/barnhouse.jpg',
+    sheathing: SheathingType.osb12, eaveOverhangM: 0.0, imagePath: 'assets/styles/barnhouse.jpg',
   ),
   HouseStyle(
     id: 'scandi', name: 'Скандинавский', tagline: 'Свет и энергоэффективность', description: 'Максимум света, натуральные материалы, ставка на тепло.',
     tips: ['Утепление от 300 мм', 'Тройные стеклопакеты', 'Простая двускатная крыша', 'Светлое дерево на фасаде'],
     lengthM: 9, widthM: 7, wallHeightM: 2.8, roofPitchDeg: 30, floors: 1, insulationMm: 300,
-    sheathing: SheathingType.osb9, eaveOverhangM: 0.5,
-    imagePath: 'assets/styles/scandi.jpg',
+    sheathing: SheathingType.osb9, eaveOverhangM: 0.5, imagePath: 'assets/styles/scandi.jpg',
   ),
   HouseStyle(
     id: 'chalet', name: 'Шале', tagline: 'Альпийский уют', description: 'Массивная крыша с широкими свесами, камень и дерево.',
@@ -97,14 +94,12 @@ const kHouseStyles = <HouseStyle>[
     id: 'aframe', name: 'A-Frame', tagline: 'Дом-шалаш', description: 'Крыша одновременно является стенами. Эффектно и компактно.',
     tips: ['Крутая крыша 45–60°', 'Антресольный второй свет', 'Идеально для дачи 30–60 м²', 'Фронтальное остекление'],
     lengthM: 7, widthM: 6, wallHeightM: 0, roofPitchDeg: 55, floors: 1, insulationMm: 250,
-    sheathing: SheathingType.osb9, eaveOverhangM: 0.0,
-    imagePath: 'assets/styles/aframe.jpg', isAFrame: true,
+    sheathing: SheathingType.osb9, eaveOverhangM: 0.0, imagePath: 'assets/styles/aframe.jpg', isAFrame: true,
   ),
   HouseStyle(
     id: 'hitech', name: 'Хай-тек', tagline: 'Минимализм и стекло', description: 'Строгая геометрия, плоская крыша и умный дом.',
     tips: ['Плоская крыша', 'Панорамное остекление', 'Фасад: штукатурка или металл', 'Утепление 200 мм'],
     lengthM: 10, widthM: 8, wallHeightM: 3.0, roofPitchDeg: 5, floors: 1, insulationMm: 200,
-    sheathing: SheathingType.osb12, eaveOverhangM: 0.0,
-    imagePath: 'assets/styles/hitech.jpg',
+    sheathing: SheathingType.osb12, eaveOverhangM: 0.0, imagePath: 'assets/styles/hitech.jpg',
   ),
 ];
