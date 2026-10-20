@@ -93,7 +93,7 @@ class _FrameVisualizationScreenState extends State<FrameVisualizationScreen> {
                 onScaleStart: (d) { _lastFocal = d.focalPoint; _startZoom = _zoom; },
                 onScaleUpdate: (d) {
                   setState(() {
-                    // ЗУМ ДО 25.0 (как вы просили)
+                    // Зум до 25.0
                     _zoom = (_startZoom * d.scale).clamp(0.2, 25.0);
                     
                     if (d.pointerCount == 1) {
