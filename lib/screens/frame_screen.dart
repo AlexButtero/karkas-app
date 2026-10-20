@@ -4,6 +4,7 @@ import '../models/house_dimensions.dart';
 import '../models/lumber_section.dart';
 import '../models/material_estimate.dart';
 import '../models/opening.dart';
+import '../data/project_repository.dart';
 import 'estimate_screen.dart';
 import 'frame_visualization_screen.dart';
 import 'opening_editor_sheet.dart';
@@ -28,7 +29,7 @@ class FrameScreen extends StatefulWidget {
   State<FrameScreen> createState() => _FrameScreenState();
 }
 
-class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStateMixin {
+class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late LumberMaterialType _lt;
   late LumberSection _studs, _plates, _joists, _rafters;
   late LumberSection _batten, _cBatten, _crossBatten;
@@ -42,13 +43,13 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
   late SheathingType _sheath;
   late BottomPlateType _bpType;
   late int _centralBeams;
-  late String _projectName;
 
   late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: 7, vsync: this);
     final p = widget.initialParams ?? FrameParams();
     _lt = p.lumberType;
@@ -64,12 +65,45 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
     _ins = p.insulation; _insT = p.insulationThickness; _sheath = p.sheathing;
     _bpType = p.bottomPlateType;
     _centralBeams = widget.dimensions.centralBeamCount;
-    _projectName = widget.projectName ?? '';
     _openings = p.openings.isEmpty ? Opening.defaults() : List.of(p.openings);
   }
 
   @override
-  void dispose() { _tabController.dispose(); super.dispose(); }
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _autoSave();
+    }
+  }
+
+  Future<void> _autoSave() async {
+    if (widget.projectId == null) return;
+    final old = await ProjectRepository.instance.getById(widget.projectId!);
+    if (old != null) {
+      await ProjectRepository.instance.update(old.copyWith(
+        dimensions: _activeDimensions,
+        frameParams: _params(),
+        updatedAt: DateTime.now(),
+      ));
+    }
+  }
+
+  Future<void> _manualSave() async {
+    await _autoSave();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Проект успешно сохранён'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
 
   HouseDimensions get _activeDimensions => widget.dimensions.copyWith(centralBeamCount: _centralBeams);
 
@@ -97,6 +131,18 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
     return [kDryPlanedSections[1], kDryPlanedSections[2]];
   }
 
+  Future<void> _navigateToEstimate(MaterialEstimate e, String? elementType) async {
+    await _autoSave(); 
+    if (!mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => EstimateScreen(
+        estimate: e, sheathing: _sheath, dimensions: _activeDimensions, frameParams: _params(),
+        projectId: widget.projectId, projectName: widget.projectName, savedPrices: widget.savedPrices,
+        elementType: elementType,
+      ),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final e = _calc();
@@ -110,6 +156,10 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => FrameVisualizationScreen(dimensions: _activeDimensions, params: _params()),
             )),
+          ),
+          IconButton(
+            icon: const Icon(Icons.save_outlined), tooltip: 'Сохранить проект',
+            onPressed: _manualSave,
           ),
         ],
         bottom: TabBar(
@@ -140,32 +190,12 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
         child: SizedBox(
           height: 54,
           child: FilledButton(
-            onPressed: () {
-              if (_projectName.isEmpty) { _askForProjectName(); return; }
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => EstimateScreen(
-                  estimate: e, sheathing: _sheath, dimensions: _activeDimensions, frameParams: _params(),
-                  projectId: widget.projectId, projectName: _projectName, savedPrices: widget.savedPrices,
-                ),
-              ));
-            },
+            onPressed: () => _navigateToEstimate(e, null), 
             child: const Text('Общая смета (весь дом)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           ),
         ),
       ),
     );
-  }
-
-  Future<void> _askForProjectName() async {
-    final ctrl = TextEditingController(text: _projectName.isEmpty ? 'Мой дом' : _projectName);
-    final name = await showDialog<String>(
-      context: context, 
-      builder: (ctx) => AlertDialog(
-        title: const Text('Название дома'), content: TextField(controller: ctrl, autofocus: true), 
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')), FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Сохранить'))]
-      )
-    );
-    if (name != null && name.isNotEmpty) setState(() => _projectName = name);
   }
 
   Widget _buildActions(String elementName, MaterialEstimate e, bool showG, bool showF, bool showW, bool showR) {
@@ -182,20 +212,22 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
             )),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
+        SizedBox(
+          height: 40,
+          width: 48,
+          child: IconButton.filledTonal(
+            icon: const Icon(Icons.save, size: 20),
+            tooltip: 'Сохранить',
+            onPressed: _manualSave,
+          ),
+        ),
+        const SizedBox(width: 8),
         Expanded(
           flex: 2,
           child: FilledButton.icon(
-            icon: const Icon(Icons.picture_as_pdf, size: 18), label: const Text('Смета элемента'),
-            onPressed: () async {
-              if (_projectName.isEmpty) { await _askForProjectName(); if (_projectName.isEmpty) return; }
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => EstimateScreen(
-                  estimate: e, sheathing: _sheath, dimensions: _activeDimensions, frameParams: _params(),
-                  projectName: _projectName, elementType: elementName,
-                ),
-              ));
-            },
+            icon: const Icon(Icons.picture_as_pdf, size: 18), label: const Text('Смета'),
+            onPressed: () => _navigateToEstimate(e, elementName),
           ),
         ),
       ],
@@ -206,8 +238,6 @@ class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStat
     final secs = _getGrillageSections();
     final safeSec = secs.contains(_plates) ? _plates : secs[0];
     return ListView(padding: const EdgeInsets.all(16), children: [
-      TextField(controller: TextEditingController(text: _projectName), decoration: const InputDecoration(labelText: 'Название проекта'), onChanged: (v) => setState(() => _projectName = v)),
-      const SizedBox(height: 16),
       _card('Пиломатериал', [
         SegmentedButton<LumberMaterialType>(showSelectedIcon: false, segments: LumberMaterialType.values.map((t) => ButtonSegment(value: t, label: Text(t.label))).toList(), selected: {_lt}, onSelectionChanged: (s) { setState(() { _lt = s.first; _plates = _getGrillageSections()[0]; _bpType = BottomPlateType.pack3; }); }),
         const SizedBox(height: 12),
