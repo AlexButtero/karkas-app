@@ -25,19 +25,37 @@ class HouseDimensions {
     this.centralBeamCount = 0,
   });
 
+  HouseDimensions copyWith({
+    double? lengthM,
+    double? widthM,
+    double? wallHeightM,
+    double? roofPitchDeg,
+    int? floors,
+    double? studSpacingMm,
+    double? eaveOverhangM,
+    double? groundClearanceM,
+    bool? isAFrame,
+    int? centralBeamCount,
+  }) {
+    return HouseDimensions(
+      lengthM: lengthM ?? this.lengthM,
+      widthM: widthM ?? this.widthM,
+      wallHeightM: wallHeightM ?? this.wallHeightM,
+      roofPitchDeg: roofPitchDeg ?? this.roofPitchDeg,
+      floors: floors ?? this.floors,
+      studSpacingMm: studSpacingMm ?? this.studSpacingMm,
+      eaveOverhangM: eaveOverhangM ?? this.eaveOverhangM,
+      groundClearanceM: groundClearanceM ?? this.groundClearanceM,
+      isAFrame: isAFrame ?? this.isAFrame,
+      centralBeamCount: centralBeamCount ?? this.centralBeamCount,
+    );
+  }
+
   double get footprintArea => lengthM * widthM;
   double get perimeter => 2 * (lengthM + widthM);
-  
-  // Расчет конька (если угол задан в градусах)
   double get ridgeRise => (widthM / 2) * math.tan(roofPitchDeg * math.pi / 180);
-      
-  double get totalHeight => isAFrame 
-      ? groundClearanceM + ridgeRise 
-      : groundClearanceM + wallHeightM * floors + ridgeRise;
-      
-  int get studsEstimate => isAFrame 
-      ? ((lengthM / (studSpacingMm / 1000)).ceil() * 2) 
-      : (perimeter * floors / (studSpacingMm / 1000)).ceil();
+  double get totalHeight => isAFrame ? groundClearanceM + ridgeRise : groundClearanceM + wallHeightM * floors + ridgeRise;
+  int get studsEstimate => isAFrame ? ((lengthM / (studSpacingMm / 1000)).ceil() * 2) : (perimeter * floors / (studSpacingMm / 1000)).ceil();
 
   Map<String, dynamic> toJson() => {
         'lengthM': lengthM,
