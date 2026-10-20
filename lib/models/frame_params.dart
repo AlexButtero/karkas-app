@@ -12,14 +12,17 @@ enum BottomPlateType {
 
 class FrameParams {
   final LumberMaterialType lumberType;
-  final LumberSection studs;
-  final LumberSection plates;
-  final LumberSection joists;
-  final LumberSection rafters;
-  final LumberSection batten;
-  final LumberSection counterBatten;
   
-  // Шаги каркаса и утепления
+  // Сечения для разных элементов
+  final LumberSection studs;       // Стойки стен
+  final LumberSection plates;      // Обвязка
+  final LumberSection joists;      // Лаги пола/перекрытий
+  final LumberSection rafters;     // Стропила
+  final LumberSection batten;      // Обрешётка
+  final LumberSection counterBatten;// Контробрешётка
+  final LumberSection crossBattens; // Доски для перекрёстного утепления (обычно 25х100 или 50х50)
+
+  // Шаги
   final int wallStudSpacingMm;
   final int floorJoistSpacingMm;
   final int roofRafterSpacingMm;
@@ -40,6 +43,7 @@ class FrameParams {
     LumberSection? rafters,
     LumberSection? batten,
     LumberSection? counterBatten,
+    LumberSection? crossBattens,
     this.wallStudSpacingMm = 600,
     this.floorJoistSpacingMm = 600,
     this.roofRafterSpacingMm = 600,
@@ -55,7 +59,8 @@ class FrameParams {
         joists = joists ?? kEdgedSections[2],
         rafters = rafters ?? kEdgedSections[1],
         batten = batten ?? kEdgedBattens[0],
-        counterBatten = counterBatten ?? kEdgedCounterBattens[0];
+        counterBatten = counterBatten ?? kEdgedCounterBattens[0],
+        crossBattens = crossBattens ?? kEdgedBattens[0];
 
   Map<String, dynamic> toJson() => {
         'lumberType': lumberType.name,
@@ -65,6 +70,7 @@ class FrameParams {
         'rafters': rafters.toJson(),
         'batten': batten.toJson(),
         'counterBatten': counterBatten.toJson(),
+        'crossBattens': crossBattens.toJson(),
         'wallStudSpacingMm': wallStudSpacingMm,
         'floorJoistSpacingMm': floorJoistSpacingMm,
         'roofRafterSpacingMm': roofRafterSpacingMm,
@@ -91,6 +97,7 @@ class FrameParams {
       rafters: parseSection(j['rafters']),
       batten: j['batten'] != null ? LumberSection.fromJson(j['batten'] as Map<String, dynamic>) : kEdgedBattens[0],
       counterBatten: j['counterBatten'] != null ? LumberSection.fromJson(j['counterBatten'] as Map<String, dynamic>) : kEdgedCounterBattens[0],
+      crossBattens: j['crossBattens'] != null ? LumberSection.fromJson(j['crossBattens'] as Map<String, dynamic>) : kEdgedBattens[0],
       wallStudSpacingMm: j['wallStudSpacingMm'] as int? ?? 600,
       floorJoistSpacingMm: j['floorJoistSpacingMm'] as int? ?? 600,
       roofRafterSpacingMm: j['roofRafterSpacingMm'] as int? ?? 600,
