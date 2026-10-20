@@ -11,7 +11,6 @@ import 'package:share_plus/share_plus.dart';
 import '../models/house_dimensions.dart';
 import '../models/material_estimate.dart';
 import '../models/frame_params.dart';
-import '../models/project.dart';
 import '../data/project_repository.dart';
 
 class EstimateScreen extends StatefulWidget {
@@ -34,15 +33,14 @@ class EstimateScreen extends StatefulWidget {
   State<EstimateScreen> createState() => _EstimateScreenState();
 }
 
-class _EstimateScreenState extends State<EstimateScreen> {
+class _EstimateScreenState extends State<EstimateScreen> with WidgetsBindingObserver {
   late final List<_Item> _items;
   bool _exporting = false;
-  late String _currentProjectName;
 
   @override
   void initState() {
     super.initState();
-    _currentProjectName = widget.projectName ?? '';
+    WidgetsBinding.instance.addObserver(this);
     final e = widget.estimate;
     
     var allItems = [
@@ -79,7 +77,37 @@ class _EstimateScreenState extends State<EstimateScreen> {
   }
 
   @override
-  void dispose() { for (final i in _items) { i.ctrl.dispose(); } super.dispose(); }
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _savePricesToDB(showSnackBar: false); 
+    for (final i in _items) { i.ctrl.dispose(); }
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _savePricesToDB(showSnackBar: false);
+    }
+  }
+
+  Future<void> _savePricesToDB({bool showSnackBar = true}) async {
+    if (widget.projectId == null) return;
+    
+    final old = await ProjectRepository.instance.getById(widget.projectId!);
+    if (old != null) {
+      await ProjectRepository.instance.update(old.copyWith(
+        prices: {for (final i in _items) i.name: i.price},
+        updatedAt: DateTime.now(),
+      ));
+      
+      if (showSnackBar && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Цены сохранены'), duration: Duration(seconds: 2)),
+        );
+      }
+    }
+  }
 
   double get _total => _items.fold(0.0, (s, i) => s + i.total);
 
@@ -88,38 +116,8 @@ class _EstimateScreenState extends State<EstimateScreen> {
     return v.toStringAsFixed(d).replaceAll('.', ',');
   }
 
-  Future<void> _saveProject() async {
-    final ctrl = TextEditingController(text: _currentProjectName);
-    final name = await showDialog<String>(context: context, builder: (ctx) => AlertDialog(title: const Text('Название проекта'), content: TextField(controller: ctrl, autofocus: true), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')), FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Сохранить'))]));
-    if (name == null || name.isEmpty) return;
-    _currentProjectName = name;
-    final now = DateTime.now();
-    final project = Project(id: widget.projectId, name: name, createdAt: now, updatedAt: now, dimensions: widget.dimensions!, frameParams: widget.frameParams!, prices: {for (final i in _items) i.name: i.price});
-    if (project.id == null) { await ProjectRepository.instance.insert(project); } else { await ProjectRepository.instance.update(project); }
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Проект сохранён!')));
-    Navigator.pop(context);
-  }
-
   Future<void> _exportPdf() async {
-    String finalName = _currentProjectName;
-    if (finalName.isEmpty) {
-      final ctrl = TextEditingController(text: 'Мой дом');
-      finalName = await showDialog<String>(
-        context: context, 
-        builder: (ctx) => AlertDialog(
-          title: const Text('Название проекта'), 
-          content: TextField(controller: ctrl, autofocus: true), 
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')), 
-            FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('ОК'))
-          ]
-        )
-      ) ?? '';
-      if (finalName.isEmpty) return;
-      _currentProjectName = finalName;
-    }
-
+    final finalName = widget.projectName ?? 'Мой дом';
     final documentTitle = widget.elementType != null 
         ? '$finalName — ${widget.elementType}' 
         : '$finalName — Общая смета';
@@ -199,8 +197,8 @@ class _EstimateScreenState extends State<EstimateScreen> {
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value = TextCellValue('СМЕТА МАТЕРИАЛОВ');
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).cellStyle = titleStyle;
       row++;
-      if (_currentProjectName.isNotEmpty) { 
-        final title = widget.elementType != null ? '$_currentProjectName — ${widget.elementType}' : _currentProjectName;
+      if (widget.projectName != null) { 
+        final title = widget.elementType != null ? '${widget.projectName} — ${widget.elementType}' : widget.projectName!;
         sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value = TextCellValue(title); 
       }
       row += 2;
@@ -242,8 +240,15 @@ class _EstimateScreenState extends State<EstimateScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.elementType != null ? 'Смета: ${widget.elementType}' : 'Общая смета'), 
-        actions: [if (widget.dimensions != null && widget.frameParams != null && widget.elementType == null) IconButton(icon: const Icon(Icons.save_outlined), onPressed: _saveProject)]
+        title: Text(widget.elementType != null ? 'Смета: ${widget.elementType}' : 'Общая смета'),
+        actions: [
+          if (widget.projectId != null)
+            IconButton(
+              icon: const Icon(Icons.save_outlined),
+              tooltip: 'Сохранить цены',
+              onPressed: () => _savePricesToDB(showSnackBar: true),
+            )
+        ],
       ),
       body: SafeArea(top: false, child: Column(children: [
         Container(margin: const EdgeInsets.all(16), padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(20)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Итого', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))), const SizedBox(height: 4), Text('${_f(_total)} ₽', style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w700)), const SizedBox(height: 2), Text('${_items.length} позиций', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)))])),
