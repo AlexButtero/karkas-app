@@ -41,7 +41,7 @@ class FramePainter extends CustomPainter {
     final sinYaw = math.sin(rotation);
 
     // Вектор направления света (светит сверху, слева, спереди)
-    final lightDir = Vector3(-0.5, 0.8, -0.5).normalize();
+    final lightDir = Vector3(-0.4, 0.8, -0.2).normalize();
 
     Offset project(double x, double y, double z) {
       final xr = x * cosYaw - z * sinYaw;
@@ -56,17 +56,14 @@ class FramePainter extends CustomPainter {
 
     // 1. РИСУЕМ СЕТКУ ПОЛА (Grid)
     final gridPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.05)
+      ..color = Colors.white.withValues(alpha: 0.08) // Чуть ярче для контраста
       ..strokeWidth = 1.0 * zoom;
     
-    // Рисуем сетку 20х20 метров с шагом 1 метр, отсекая лишнее
     for (int i = -10; i <= 10; i++) {
-      // Линии вдоль X
       final p1 = project(-10, -0.05, i.toDouble());
       final p2 = project(10, -0.05, i.toDouble());
       canvas.drawLine(p1, p2, gridPaint);
       
-      // Линии вдоль Z
       final p3 = project(i.toDouble(), -0.05, -10);
       final p4 = project(i.toDouble(), -0.05, 10);
       canvas.drawLine(p3, p4, gridPaint);
@@ -74,7 +71,6 @@ class FramePainter extends CustomPainter {
 
     final faces = <_Face>[];
 
-    // Функция добавления 3D-коробки (бруса)
     void addBox(double x, double y, double z, double w, double h, double d, Color base) {
       final x1 = x, x2 = x + w, y1 = y, y2 = y + h, z1 = z, z2 = z + d;
       final pts = [
@@ -82,7 +78,6 @@ class FramePainter extends CustomPainter {
         project(x1, y1, z2), project(x2, y1, z2), project(x2, y2, z2), project(x1, y2, z2), // задняя
       ];
 
-      // Определяем нормали для каждой грани и считаем освещение
       final fDefs = [
         ([0,1,2,3], _applyLight(base, Vector3(0, 0, -1), lightDir)), // Передняя
         ([4,5,6,7], _applyLight(base, Vector3(0, 0, 1), lightDir)),  // Задняя
@@ -93,7 +88,8 @@ class FramePainter extends CustomPainter {
       ];
 
       final cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, cz = (z1 + z2) / 2;
-      final dep = depth(cx, cy, cz);
+      // Добавляем микро-смещение, чтобы избежать ряби (Z-fighting)
+      final dep = depth(cx, cy, cz) + (w * h * d) * 0.001;
 
       for (final f in fDefs) {
         faces.add(_Face(f.$1.map((i) => pts[i]).toList(), f.$2, dep));
@@ -132,7 +128,8 @@ class FramePainter extends CustomPainter {
       ];
       
       final cx = x, cy = (yStart + yEnd) / 2, cz = (zStart + zEnd) / 2;
-      final dep = depth(cx, cy, cz);
+      final dep = depth(cx, cy, cz) + 0.001;
+
       for (final f in fDefs) {
         faces.add(_Face(f.$1.map((i) => pts[i]).toList(), f.$2, dep));
       }
@@ -162,15 +159,15 @@ class FramePainter extends CustomPainter {
     final cW = params.crossBattens.actualWidthMm / 1000.0;
     final cH = params.crossBattens.actualHeightMm / 1000.0;
 
-    // Естественные цвета дерева
-    final wood = const Color(0xFFC89B6D);       // Светлое дерево (верхние грани)
-    final woodDark = const Color(0xFF9E6A40);   // Темное дерево (сучки, пакеты)
-    final studColor = const Color(0xFFD2A679);  // Стойки
-    final joistColor = const Color(0xFFB98C60); // Лаги
-    final roofColor = const Color(0xFFA87B54);  // Стропила
-    final battenColor = const Color(0xFFB27E52);// Обрешетка
-    final ridgeColor = const Color(0xFF8B5A2B); // Конек
-    final insColor = const Color(0xFFE5C07B);   // Утеплитель
+    // Естественные, чуть более светлые цвета дерева
+    final wood = const Color(0xFFD4A373);       
+    final woodDark = const Color(0xFFB58354);   
+    final studColor = const Color(0xFFE0B588);  
+    final joistColor = const Color(0xFFCCA170); 
+    final roofColor = const Color(0xFFB88B60);  
+    final battenColor = const Color(0xFFC49565);
+    final ridgeColor = const Color(0xFF9E6A40); 
+    final insColor = const Color(0xFFF0D080);   
 
     final beamWidth = params.bottomPlateType == BottomPlateType.solid ? 0.150 : (params.plates.actualWidthMm / 1000.0 * params.bottomPlateMultiplier);
 
@@ -266,27 +263,27 @@ class FramePainter extends CustomPainter {
       }
     }
 
+    // 3. СОРТИРОВКА И ОТРИСОВКА
+    // Сортируем строго по глубине, чтобы передние грани рисовались поверх задних
     faces.sort((a, b) => b.depth.compareTo(a.depth));
 
     final fillPaint = Paint()..style = PaintingStyle.fill;
     final strokePaint = Paint()
       ..style = PaintingStyle.stroke
-      ..color = Colors.black.withValues(alpha: 0.3)
+      ..color = Colors.black.withValues(alpha: 0.15) // Мягкая обводка, не делает модель черной
       ..strokeWidth = 0.5;
 
     for (final f in faces) {
       final path = Path()..addPolygon(f.pts, true);
       
-      // ПРОЦЕДУРНАЯ ТЕКСТУРА ДЕРЕВА (Градиент вдоль грани)
       final rect = _getBounds(f.pts);
       if (rect != null && rect.width > 2 && rect.height > 2) {
-        // Если грань вытянутая, пускаем градиент вдоль длинной стороны
         final isHorizontal = rect.width > rect.height;
         final gradient = ui.Gradient.linear(
           isHorizontal ? rect.centerLeft : rect.topCenter,
           isHorizontal ? rect.centerRight : rect.bottomCenter,
           [
-            f.color.withValues(alpha: 0.7),
+            f.color.withValues(alpha: 0.8),
             f.color,
             f.color.withValues(alpha: 0.8),
             f.color,
@@ -304,19 +301,19 @@ class FramePainter extends CustomPainter {
     }
   }
 
-  // Вектор направления света
+  // Мягкое освещение (чтобы не было черных провалов)
   Color _applyLight(Color base, Vector3 normal, Vector3 lightDir) {
-    final intensity = math.max(0.2, normal.dot(lightDir));
-    final clamped = math.min(1.0, intensity);
+    final dot = normal.dot(lightDir);
+    // Базовый свет 0.6 (60% яркости) + направленный
+    final intensity = 0.6 + 0.4 * math.max(0.0, dot);
     
-    final r = (base.red * clamped).clamp(0, 255).toInt();
-    final g = (base.green * clamped).clamp(0, 255).toInt();
-    final b = (base.blue * clamped).clamp(0, 255).toInt();
+    final r = (base.red * intensity).clamp(0, 255).toInt();
+    final g = (base.green * intensity).clamp(0, 255).toInt();
+    final b = (base.blue * intensity).clamp(0, 255).toInt();
     
     return Color.fromARGB(255, r, g, b);
   }
 
-  // Вспомогательная функция для получения рамок полигона
   Rect? _getBounds(List<Offset> pts) {
     if (pts.isEmpty) return null;
     double minX = pts[0].dx, maxX = pts[0].dx;
@@ -338,7 +335,6 @@ class FramePainter extends CustomPainter {
       old.dim != dim || old.params != params;
 }
 
-// Простой класс для векторов (чтобы не подключать тяжелые библиотеки)
 class Vector3 {
   final double x, y, z;
   Vector3(this.x, this.y, this.z);
