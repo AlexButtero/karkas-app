@@ -22,8 +22,13 @@ class EstimateScreen extends StatefulWidget {
   final int? projectId;
   final String? projectName;
   final Map<String, double>? savedPrices;
+  final String? elementType; 
 
-  const EstimateScreen({required this.estimate, required this.sheathing, this.dimensions, this.frameParams, this.projectId, this.projectName, this.savedPrices, super.key});
+  const EstimateScreen({
+    required this.estimate, required this.sheathing, this.dimensions, 
+    this.frameParams, this.projectId, this.projectName, this.savedPrices, 
+    this.elementType, super.key
+  });
   
   @override
   State<EstimateScreen> createState() => _EstimateScreenState();
@@ -32,30 +37,45 @@ class EstimateScreen extends StatefulWidget {
 class _EstimateScreenState extends State<EstimateScreen> {
   late final List<_Item> _items;
   bool _exporting = false;
+  late String _currentProjectName;
 
   @override
   void initState() {
     super.initState();
+    _currentProjectName = widget.projectName ?? '';
     final e = widget.estimate;
     
-    _items = [
+    var allItems = [
       for (final l in e.lumber)
         _Item(
-          l.name, 
-          'м³', 
-          l.volume, 
-          l.meters, 
-          l.count, 
-          l.pieceLengthM, 
-          l.section.displayLabel,
+          l.name, 'м³', l.volume, l.meters, l.count, l.pieceLengthM, l.section.displayLabel,
           widget.savedPrices?[l.name]?.toString() ?? (l.name.contains('Обрешётка') ? '15000' : '18000')
         ),
       if (e.hasStonePlinth)
         _Item('Каменный цоколь (облицовка)', 'м²', (widget.dimensions!.lengthM + widget.dimensions!.widthM) * 2 * widget.dimensions!.groundClearanceM, 0, 0, 0, '', '3500'),
+      if (e.rostverkNailsCount > 0)
+        _Item('Гвозди 90 мм (для ростверка)', 'кг', e.rostverkNailsWeight, 0, 0, 0, '', '350'),
       _Item(widget.sheathing.label, 'лист', e.osbSheets.toDouble(), 0, 0, 0, '', widget.savedPrices?[widget.sheathing.label]?.toString() ?? '800'),
       _Item('${e.insulation.label}, ${e.insulationThicknessMm.toInt()} мм', 'м³', e.insulationVolume, 0, 0, 0, '', widget.savedPrices?[e.insulation.label]?.toString() ?? '4500'),
-      _Item('Крепёж', 'кг', e.fastenersKg, 0, 0, 0, '', widget.savedPrices?['Крепёж']?.toString() ?? '250'),
+      _Item('Крепёж (общий)', 'кг', e.fastenersKg, 0, 0, 0, '', widget.savedPrices?['Крепёж']?.toString() ?? '250'),
     ];
+
+    if (widget.elementType != null) {
+      final filter = widget.elementType!.toLowerCase();
+      _items = allItems.where((i) {
+        final name = i.name.toLowerCase();
+        if (filter.contains('ростверк')) return name.contains('ростверк') || name.contains('гвозди');
+        if (filter.contains('полы')) return name.contains('пола 1-го');
+        if (filter.contains('перекрытия')) return name.contains('перекрытий 2+');
+        if (filter.contains('чердак')) return name.contains('чердака');
+        if (filter.contains('стены')) return name.contains('стойки') || name.contains('обвязка (верхняя)') || name.contains('обрамление') || name.contains('обрешетка стен');
+        if (filter.contains('крыша')) return name.contains('стропила') || name.contains('обрешётка') || name.contains('контробрешётка') || name.contains('обрешетка крыши');
+        if (filter.contains('перегородки')) return name.contains('перегородки');
+        return false;
+      }).toList();
+    } else {
+      _items = allItems;
+    }
   }
 
   @override
@@ -69,9 +89,10 @@ class _EstimateScreenState extends State<EstimateScreen> {
   }
 
   Future<void> _saveProject() async {
-    final ctrl = TextEditingController(text: widget.projectName ?? 'Мой дом');
+    final ctrl = TextEditingController(text: _currentProjectName);
     final name = await showDialog<String>(context: context, builder: (ctx) => AlertDialog(title: const Text('Название проекта'), content: TextField(controller: ctrl, autofocus: true), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')), FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Сохранить'))]));
     if (name == null || name.isEmpty) return;
+    _currentProjectName = name;
     final now = DateTime.now();
     final project = Project(id: widget.projectId, name: name, createdAt: now, updatedAt: now, dimensions: widget.dimensions!, frameParams: widget.frameParams!, prices: {for (final i in _items) i.name: i.price});
     if (project.id == null) { await ProjectRepository.instance.insert(project); } else { await ProjectRepository.instance.update(project); }
@@ -81,22 +102,27 @@ class _EstimateScreenState extends State<EstimateScreen> {
   }
 
   Future<void> _exportPdf() async {
-    String? name = widget.projectName;
-    if (name == null || name.isEmpty) {
-      final ctrl = TextEditingController(text: 'Моя смета');
-      name = await showDialog<String>(
+    String finalName = _currentProjectName;
+    if (finalName.isEmpty) {
+      final ctrl = TextEditingController(text: 'Мой дом');
+      finalName = await showDialog<String>(
         context: context, 
         builder: (ctx) => AlertDialog(
-          title: const Text('Название для PDF'), 
+          title: const Text('Название проекта'), 
           content: TextField(controller: ctrl, autofocus: true), 
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')), 
             FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('ОК'))
           ]
         )
-      );
-      if (name == null || name.isEmpty) return;
+      ) ?? '';
+      if (finalName.isEmpty) return;
+      _currentProjectName = finalName;
     }
+
+    final documentTitle = widget.elementType != null 
+        ? '$finalName — ${widget.elementType}' 
+        : '$finalName — Общая смета';
 
     setState(() => _exporting = true);
     try {
@@ -126,12 +152,12 @@ class _EstimateScreenState extends State<EstimateScreen> {
           pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
             pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [pw.Text('СМЕТА МАТЕРИАЛОВ', style: pw.TextStyle(font: boldFont, fontSize: 22)), pw.SizedBox(height: 4), pw.Text('KARKAS — проектирование домов', style: pw.TextStyle(font: baseFont, fontSize: 12, color: PdfColors.grey600))]),
             pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-              pw.Text(name!, style: pw.TextStyle(font: boldFont, fontSize: 14)), 
+              pw.Text(documentTitle, style: pw.TextStyle(font: boldFont, fontSize: 14)), 
               pw.Text(DateTime.now().toString().split(' ')[0], style: pw.TextStyle(font: baseFont, fontSize: 10, color: PdfColors.grey600))
             ])
           ]),
           pw.SizedBox(height: 10), pw.Divider(color: PdfColors.grey400), pw.SizedBox(height: 10),
-          if (widget.dimensions != null)
+          if (widget.dimensions != null && widget.elementType == null)
             pw.Container(padding: const pw.EdgeInsets.all(10), decoration: pw.BoxDecoration(color: PdfColors.grey100, borderRadius: pw.BorderRadius.circular(6)), child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Габариты: ${_f(widget.dimensions!.lengthM, 0)} × ${_f(widget.dimensions!.widthM, 0)} м', style: pw.TextStyle(font: baseFont, fontSize: 10)), pw.Text('Этажей: ${widget.dimensions!.floors}', style: pw.TextStyle(font: baseFont, fontSize: 10)), pw.Text('Угол крыши: ${_f(widget.dimensions!.roofPitchDeg, 0)}°', style: pw.TextStyle(font: baseFont, fontSize: 10))])),
           pw.SizedBox(height: 16),
           pw.TableHelper.fromTextArray(
@@ -152,7 +178,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
       ));
 
       final bytes = await doc.save();
-      await Printing.sharePdf(bytes: bytes, filename: 'smeta_karkas.pdf');
+      await Printing.sharePdf(bytes: bytes, filename: '$documentTitle.pdf');
     } catch (e) {
       if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка PDF: $e')));
     } finally { if (mounted) setState(() => _exporting = false); }
@@ -173,7 +199,10 @@ class _EstimateScreenState extends State<EstimateScreen> {
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value = TextCellValue('СМЕТА МАТЕРИАЛОВ');
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).cellStyle = titleStyle;
       row++;
-      if (widget.projectName != null) { sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value = TextCellValue(widget.projectName!); }
+      if (_currentProjectName.isNotEmpty) { 
+        final title = widget.elementType != null ? '$_currentProjectName — ${widget.elementType}' : _currentProjectName;
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value = TextCellValue(title); 
+      }
       row += 2;
 
       final headers = ['Позиция', 'Размер элемента', 'Точное кол-во', 'К закупке', 'Объем', 'Ед.', 'Цена (₽)', 'Сумма (₽)'];
@@ -212,7 +241,10 @@ class _EstimateScreenState extends State<EstimateScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Смета'), actions: [if (widget.dimensions != null && widget.frameParams != null) IconButton(icon: const Icon(Icons.save_outlined), onPressed: _saveProject)]),
+      appBar: AppBar(
+        title: Text(widget.elementType != null ? 'Смета: ${widget.elementType}' : 'Общая смета'), 
+        actions: [if (widget.dimensions != null && widget.frameParams != null && widget.elementType == null) IconButton(icon: const Icon(Icons.save_outlined), onPressed: _saveProject)]
+      ),
       body: SafeArea(top: false, child: Column(children: [
         Container(margin: const EdgeInsets.all(16), padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(20)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Итого', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))), const SizedBox(height: 4), Text('${_f(_total)} ₽', style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w700)), const SizedBox(height: 2), Text('${_items.length} позиций', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)))])),
         Expanded(child: ListView.builder(padding: const EdgeInsets.symmetric(horizontal: 16), itemCount: _items.length, itemBuilder: (_, i) {
