@@ -10,7 +10,7 @@ class HouseDimensions {
   final double eaveOverhangM;
   final double groundClearanceM;
   final bool isAFrame;
-  final int centralBeamCount; // <-- НОВОЕ: количество центральных балок
+  final int centralBeamCount;
 
   const HouseDimensions({
     required this.lengthM,
@@ -28,6 +28,7 @@ class HouseDimensions {
   double get footprintArea => lengthM * widthM;
   double get perimeter => 2 * (lengthM + widthM);
   
+  // Расчет конька (если угол задан в градусах)
   double get ridgeRise => (widthM / 2) * math.tan(roofPitchDeg * math.pi / 180);
       
   double get totalHeight => isAFrame 
