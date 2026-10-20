@@ -21,6 +21,25 @@ class Project {
     required this.prices,
   });
 
+  Project copyWith({
+    int? id,
+    String? name,
+    DateTime? updatedAt,
+    HouseDimensions? dimensions,
+    FrameParams? frameParams,
+    Map<String, double>? prices,
+  }) {
+    return Project(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      dimensions: dimensions ?? this.dimensions,
+      frameParams: frameParams ?? this.frameParams,
+      prices: prices ?? this.prices,
+    );
+  }
+
   Map<String, dynamic> toMap() => {
         if (id != null) 'id': id,
         'name': name,
