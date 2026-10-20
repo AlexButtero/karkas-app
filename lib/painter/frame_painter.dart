@@ -12,7 +12,9 @@ class FramePainter extends CustomPainter {
   final double zoom;
   final Offset pan;
   final bool showRoof;
-  final bool showWalls; // <-- НОВОЕ
+  final bool showWalls;
+  final bool showFloors;
+  final bool showGrillage;
 
   FramePainter({
     required this.dim,
@@ -22,7 +24,9 @@ class FramePainter extends CustomPainter {
     required this.zoom,
     required this.pan,
     this.showRoof = true,
-    this.showWalls = true, // <-- НОВОЕ
+    this.showWalls = true,
+    this.showFloors = true,
+    this.showGrillage = true,
   });
 
   @override
@@ -101,20 +105,27 @@ class FramePainter extends CustomPainter {
 
     final L = dim.lengthM;
     final W = dim.widthM;
-    final H = dim.wallHeightM * dim.floors;
+    final H = dim.wallHeightM;
+    final totalH = H * dim.floors;
     final ridge = dim.ridgeRise;
-    final spacing = dim.studSpacingMm / 1000;
+    
+    final wallSpacing = params.wallStudSpacingMm / 1000;
+    final floorSpacing = params.floorJoistSpacingMm / 1000;
+    final roofSpacing = params.roofRafterSpacingMm / 1000;
+    final wallInsSpacing = params.wallCrossInsulationSpacingMm / 1000;
+    final roofInsSpacing = params.roofCrossInsulationSpacingMm / 1000;
 
     final sW = params.studs.actualWidthMm / 1000.0;
-    final sH = params.studs.actualHeightMm / 1000.0;
-    final pW = params.plates.actualWidthMm / 1000.0;
     final pH = params.plates.actualHeightMm / 1000.0;
+    final pW = params.plates.actualWidthMm / 1000.0;
     final jW = params.joists.actualWidthMm / 1000.0;
     final jH = params.joists.actualHeightMm / 1000.0;
     final rW = params.rafters.actualWidthMm / 1000.0;
     final rH = params.rafters.actualHeightMm / 1000.0;
     final bW = params.batten.actualWidthMm / 1000.0;
     final bH = params.batten.actualHeightMm / 1000.0;
+    final cW = params.crossBattens.actualWidthMm / 1000.0;
+    final cH = params.crossBattens.actualHeightMm / 1000.0;
 
     final wood = const Color(0xFFD1A77C);
     final woodDark = const Color(0xFFB89068);
@@ -123,183 +134,109 @@ class FramePainter extends CustomPainter {
     final roofColor = const Color(0xFFB8855A);
     final battenColor = const Color(0xFFA67B52);
     final ridgeColor = const Color(0xFF9E6A40);
+    final insColor = const Color(0xFFFFD54F); // Цвет перекрестного утепления
 
-    // Функция отрисовки балок (пакет или монолит)
-    void drawBeam(double x, double z, double len, double wid, {required bool alignX}) {
-      if (params.bottomPlateType == BottomPlateType.solid) {
-        addBox(x, 0, z, alignX ? len : wid, 0.150, alignX ? wid : len, wood);
-      } else {
-        final bw = params.plates.actualWidthMm / 1000.0;
-        final bh = params.plates.actualHeightMm / 1000.0;
-        final count = params.bottomPlateMultiplier;
-        
-        for (int i = 0; i < count; i++) {
-          final color = i % 2 == 0 ? wood : woodDark;
-          if (alignX) {
-            // Балка идет вдоль оси X (Передняя/Задняя стены), доски укладываются вдоль Z
-            addBox(x, 0, z + i * bw, len, bh, bw, color);
-          } else {
-            // Балка идет вдоль оси Z (Левая/Правая стены), доски укладываются вдоль X
-            addBox(x + i * bw, 0, z, bw, bh, len, color);
-          }
-        }
-      }
-    }
+    final beamWidth = params.bottomPlateType == BottomPlateType.solid ? 0.150 : (params.plates.actualWidthMm / 1000.0 * params.bottomPlateMultiplier);
 
-    bool isOpening(double pos, WallSide wall) {
-      final wallOpenings = params.openings.where((o) => o.wall == wall).toList();
-      if (wallOpenings.isEmpty) return false;
-      double currentX = 0.0;
-      final wallLen = (wall == WallSide.front || wall == WallSide.back) ? L : W;
-      for (final op in wallOpenings) {
-        final wM = op.widthMm / 1000.0;
-        final gap = (wallLen - wallOpenings.fold<double>(0.0, (s, o) => s + (o.widthMm / 1000.0) * o.quantity)) / (wallOpenings.fold<int>(0, (s, o) => s + o.quantity) + 1);
-        for (int i = 0; i < op.quantity; i++) {
-          currentX += gap;
-          if (pos >= currentX - 0.01 && pos <= currentX + wM + 0.01) return true;
-          currentX += wM;
-        }
-      }
-      return false;
-    }
-
-    void drawFraming(WallSide wall, double pos, Opening op) {
-      final wM = op.widthMm / 1000.0;
-      final hM = op.heightMm / 1000.0;
-      final sillM = op.sillHeightMm / 1000.0;
-      
-      if (wall == WallSide.front || wall == WallSide.back) {
-        final z = wall == WallSide.front ? 0.0 : W - pW;
-        addBox(pos, sillM + hM, z, wM, pH, pW, studColor);
-        if (op.type == OpeningType.window) addBox(pos, sillM, z, wM, pH, pW, studColor);
-      } else {
-        final x = wall == WallSide.left ? 0.0 : L - pW;
-        addBox(x, sillM + hM, pos, pW, pH, wM, studColor);
-        if (op.type == OpeningType.window) addBox(x, sillM, pos, pW, pH, wM, studColor);
-      }
-    }
-
-    final mult = params.bottomPlateMultiplier;
-    final bw = params.bottomPlateType == BottomPlateType.solid ? 0.150 : params.plates.actualWidthMm / 1000.0;
-    final beamWidth = params.bottomPlateType == BottomPlateType.solid ? 0.150 : (bw * mult);
-
-    if (dim.isAFrame) {
-      drawBeam(0.0, 0.0, L, beamWidth, alignX: true);
-      drawBeam(0.0, W - beamWidth, L, beamWidth, alignX: true);
-      drawBeam(0.0, beamWidth, W - 2 * beamWidth, beamWidth, alignX: false);
-      drawBeam(L - beamWidth, beamWidth, W - 2 * beamWidth, beamWidth, alignX: false);
-
-      if (dim.centralBeamCount > 0) {
-        for (int i = 1; i <= dim.centralBeamCount; i++) {
-          final zPos = W * (i / (dim.centralBeamCount + 1)) - beamWidth / 2;
-          drawBeam(beamWidth, zPos, L - 2 * beamWidth, beamWidth, alignX: true);
-        }
-      }
-
-      for (double x = beamWidth * 2; x < L - beamWidth; x += spacing) {
-        addBox(x, pH, beamWidth, jW, jH, W - 2 * beamWidth, joistColor);
-      }
-
-      if (showWalls) {
-        final midZ = W / 2;
-        for (double x = pW; x <= L - 0.1; x += spacing) {
-          addRafter(x, 0.0, 0.0, ridge, midZ, rW, rH, roofColor);
-          addRafter(x, 0.0, W, ridge, midZ, rW, rH, roofColor);
-        }
-        addBox(0.0, ridge - rH / 2, midZ - rW / 2, L, rH, rW, ridgeColor);
-      }
-    } else {
-      for (double x = beamWidth * 2; x < L - beamWidth; x += spacing) {
-        addBox(x, pH, beamWidth, jW, jH, W - 2 * beamWidth, joistColor);
-      }
-
-      drawBeam(0.0, 0.0, L, beamWidth, alignX: true);
-      drawBeam(0.0, W - beamWidth, L, beamWidth, alignX: true);
-      drawBeam(0.0, beamWidth, W - 2 * beamWidth, beamWidth, alignX: false);
-      drawBeam(L - beamWidth, beamWidth, W - 2 * beamWidth, beamWidth, alignX: false);
-
-      if (dim.centralBeamCount > 0) {
-        for (int i = 1; i <= dim.centralBeamCount; i++) {
-          final zPos = W * (i / (dim.centralBeamCount + 1)) - beamWidth / 2;
-          drawBeam(beamWidth, zPos, L - 2 * beamWidth, beamWidth, alignX: true);
-        }
-      }
-
-      if (showWalls) {
-        for (final wall in [WallSide.front, WallSide.back]) {
-          final z = wall == WallSide.front ? 0.0 : W - sW;
-          for (double x = pW; x < L - 0.1; x += spacing) {
-            if (!isOpening(x, wall)) addBox(x, pH, z, sW, H - pH * 2, sW, studColor);
-          }
-          final wallOpenings = params.openings.where((o) => o.wall == wall).toList();
-          double currentX = 0.0;
-          final gap = (L - wallOpenings.fold<double>(0.0, (s, o) => s + (o.widthMm / 1000.0) * o.quantity)) / (wallOpenings.fold<int>(0, (s, o) => s + o.quantity) + 1);
-          for (final op in wallOpenings) {
-            for (int i = 0; i < op.quantity; i++) {
-              currentX += gap;
-              drawFraming(wall, currentX, op);
-              currentX += op.widthMm / 1000.0;
-            }
-          }
-        }
-
-        for (final wall in [WallSide.left, WallSide.right]) {
-          final x = wall == WallSide.left ? 0.0 : L - sW;
-          for (double z = pW * 2; z < W - 0.1; z += spacing) {
-            if (!isOpening(z, wall)) addBox(x, pH, z, sW, H - pH * 2, sW, studColor);
-          }
-          final wallOpenings = params.openings.where((o) => o.wall == wall).toList();
-          double currentZ = 0.0;
-          final gap = (W - wallOpenings.fold<double>(0.0, (s, o) => s + (o.widthMm / 1000.0) * o.quantity)) / (wallOpenings.fold<int>(0, (s, o) => s + o.quantity) + 1);
-          for (final op in wallOpenings) {
-            for (int i = 0; i < op.quantity; i++) {
-              currentZ += gap;
-              drawFraming(wall, currentZ, op);
-              currentZ += op.widthMm / 1000.0;
-            }
-          }
-        }
-
-        addBox(0.0, pH, 0.0, sW, H - pH * 2, sW, studColor);
-        addBox(L - sW, pH, 0.0, sW, H - pH * 2, sW, studColor);
-        addBox(0.0, pH, W - sW, sW, H - pH * 2, sW, studColor);
-        addBox(L - sW, pH, W - sW, sW, H - pH * 2, sW, studColor);
-
-        addBox(0.0, H - pH, 0.0, L, pH, pW, wood);
-        addBox(0.0, H - pH, W - pW, L, pH, pW, wood);
-        addBox(0.0, H - pH, pW, pW, pH, W - 2 * pW, wood);
-        addBox(L - pW, H - pH, pW, pW, pH, W - 2 * pW, wood);
-      }
-
-      if (showRoof && showWalls) {
-        final ridgeY = H + ridge;
-        final midZ = W / 2;
-        final pitchRad = dim.roofPitchDeg * math.pi / 180;
-        final drop = dim.eaveOverhangM * math.tan(pitchRad);
-        final yStart = H - drop;
-        final zLeft = -dim.eaveOverhangM;
-        final zRight = W + dim.eaveOverhangM;
-
-        for (double x = pW; x < L - 0.1; x += spacing) {
-          addRafter(x, yStart, zLeft, ridgeY, midZ, rW, rH, roofColor);
-          addRafter(x, yStart, zRight, ridgeY, midZ, rW, rH, roofColor);
-        }
-        addBox(0.0, ridgeY - rH / 2, midZ - rW / 2, L, rH, rW, ridgeColor);
-
-        final battenSpacingM = params.battenSpacingMm / 1000;
-        final slopeLen = math.sqrt(math.pow(midZ - zLeft, 2) + math.pow(ridgeY - yStart, 2));
-        final battenCount = (slopeLen / battenSpacingM).ceil() + 1;
-        
-        for (int i = 0; i < battenCount; i++) {
-          final t = i / (battenCount - 1);
-          final zL = zLeft + (midZ - zLeft) * t;
-          final yL = yStart + (ridgeY - yStart) * t;
-          final zR = zRight - (zRight - midZ) * t;
-          final yR = yStart + (ridgeY - yStart) * t;
+    // 1. РОСТВЕРК
+    if (showGrillage) {
+      void drawBeam(double x, double z, double len, double wid, {required bool alignX}) {
+        if (params.bottomPlateType == BottomPlateType.solid) {
+          addBox(x, 0, z, alignX ? len : wid, 0.150, alignX ? wid : len, wood);
+        } else {
+          final bw = params.plates.actualWidthMm / 1000.0;
+          final bh = params.plates.actualHeightMm / 1000.0;
+          final count = params.bottomPlateMultiplier;
           
-          addBox(0.0, yL + rH, zL - bW/2, L, bH, bW, battenColor);
-          addBox(0.0, yR + rH, zR - bW/2, L, bH, bW, battenColor);
+          for (int i = 0; i < count; i++) {
+            final color = i % 2 == 0 ? wood : woodDark;
+            if (alignX) {
+              addBox(x, 0, z + i * bw, len, bh, bw, color);
+            } else {
+              addBox(x + i * bw, 0, z, bw, bh, len, color);
+            }
+          }
         }
+      }
+
+      drawBeam(0.0, 0.0, L, beamWidth, alignX: true);
+      drawBeam(0.0, W - beamWidth, L, beamWidth, alignX: true);
+      drawBeam(0.0, beamWidth, W - 2 * beamWidth, beamWidth, alignX: false);
+      drawBeam(L - beamWidth, beamWidth, W - 2 * beamWidth, beamWidth, alignX: false);
+
+      if (dim.centralBeamCount > 0) {
+        for (int i = 1; i <= dim.centralBeamCount; i++) {
+          final zPos = W * (i / (dim.centralBeamCount + 1)) - beamWidth / 2;
+          drawBeam(beamWidth, zPos, L - 2 * beamWidth, beamWidth, alignX: true);
+        }
+      }
+    }
+
+    // 2. ПОЛЫ И ПЕРЕКРЫТИЯ
+    if (showFloors) {
+      for (int f = 0; f < dim.floors; f++) {
+        final yPos = f * H + pH;
+        for (double x = beamWidth * 2; x < L - beamWidth; x += floorSpacing) {
+          addBox(x, yPos, beamWidth, jW, jH, W - 2 * beamWidth, joistColor);
+        }
+      }
+    }
+
+    // 3. СТЕНЫ
+    if (showWalls) {
+      for (int f = 0; f < dim.floors; f++) {
+        final yBase = f * H;
+        
+        // Стойки передние и задние
+        for (double x = pW; x < L - 0.1; x += wallSpacing) {
+          addBox(x, yBase + pH, 0.0, sW, H - pH * 2, sW, studColor);
+          addBox(x, yBase + pH, W - sW, sW, H - pH * 2, sW, studColor);
+        }
+        // Стойки боковые
+        for (double z = pW * 2; z < W - 0.1; z += wallSpacing) {
+          addBox(0.0, yBase + pH, z, sW, H - pH * 2, sW, studColor);
+          addBox(L - sW, yBase + pH, z, sW, H - pH * 2, sW, studColor);
+        }
+
+        // Перекрестное утепление (горизонтальные доски)
+        if (f == 0) { // Пока рисуем только для 1-го этажа, чтобы не перегружать
+          for (double y = pH + wallInsSpacing; y < H - pH; y += wallInsSpacing) {
+            addBox(0, yBase + y, -cW, L, cH, cW, insColor);
+            addBox(0, yBase + y, W, L, cH, cW, insColor);
+          }
+        }
+      }
+    }
+
+    // 4. КРЫША
+    if (showRoof && showWalls) {
+      final ridgeY = totalH + ridge;
+      final midZ = W / 2;
+      final pitchRad = dim.roofPitchDeg * math.pi / 180;
+      final drop = dim.eaveOverhangM * math.tan(pitchRad);
+      final yStart = totalH - drop;
+      final zLeft = -dim.eaveOverhangM;
+      final zRight = W + dim.eaveOverhangM;
+
+      for (double x = pW; x < L - 0.1; x += roofSpacing) {
+        addRafter(x, yStart, zLeft, ridgeY, midZ, rW, rH, roofColor);
+        addRafter(x, yStart, zRight, ridgeY, midZ, rW, rH, roofColor);
+      }
+      addBox(0.0, ridgeY - rH / 2, midZ - rW / 2, L, rH, rW, ridgeColor);
+
+      // Перекрестное утепление крыши
+      final slopeLen = math.sqrt(math.pow(midZ - zLeft, 2) + math.pow(ridgeY - yStart, 2));
+      final roofInsCount = (slopeLen / roofInsSpacing).ceil();
+      
+      for (int i = 0; i < roofInsCount; i++) {
+        final t = i / (roofInsCount > 1 ? roofInsCount - 1 : 1);
+        final zL = zLeft + (midZ - zLeft) * t;
+        final yL = yStart + (ridgeY - yStart) * t;
+        final zR = zRight - (zRight - midZ) * t;
+        final yR = yStart + (ridgeY - yStart) * t;
+        
+        addBox(0.0, yL - cH, zL, L, cH, cW, insColor);
+        addBox(0.0, yR - cH, zR, L, cH, cW, insColor);
       }
     }
 
@@ -319,6 +256,7 @@ class FramePainter extends CustomPainter {
   bool shouldRepaint(covariant FramePainter old) =>
       old.rotation != rotation || old.pitch != pitch || old.zoom != zoom ||
       old.pan != pan || old.showRoof != showRoof || old.showWalls != showWalls || 
+      old.showFloors != showFloors || old.showGrillage != showGrillage ||
       old.dim != dim || old.params != params;
 }
 
