@@ -17,6 +17,7 @@ dependencies:
   share_plus: ^10.1.2
   path_provider: ^2.1.5
   shared_preferences: ^2.3.2
+  flutter_launcher_icons: ^0.13.1   # <-- ДОБАВЛЕНО
 
 flutter:
   uses-material-design: true
@@ -24,3 +25,10 @@ flutter:
     - assets/fonts/Roboto-Regular.ttf
     - assets/fonts/Roboto-Bold.ttf
     - assets/styles/
+
+# НАСТРОЙКА ИКОНКИ (ДОБАВЛЕНО)
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: false
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
