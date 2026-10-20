@@ -1,4 +1,4 @@
-import 'dart:async'; // <-- ДОБАВЛЕНО ДЛЯ ТАЙМЕРА
+import 'dart:async'; 
 import 'package:flutter/material.dart';
 import '../core/theme_controller.dart';
 import '../data/project_repository.dart';
@@ -32,7 +32,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   Future<void> _delete(Project p) async {
     if (p.id == null) return;
     await ProjectRepository.instance.delete(p.id!);
-    _load(); // Удаляем из списка сразу
+    _load(); 
 
     if (!mounted) return;
     
@@ -43,7 +43,6 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
       SnackBar(
         content: StatefulBuilder(
           builder: (context, setSnackBarState) {
-            // Запускаем таймер только один раз
             timer ??= Timer.periodic(const Duration(seconds: 1), (t) {
               if (seconds > 1) {
                 setSnackBarState(() { seconds--; });
@@ -70,11 +69,10 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           },
         ),
         duration: const Duration(seconds: 10),
-        showCloseIcon: true,
+        // showCloseIcon: true,  <-- УДАЛЕНО, чтобы убрать крестик
       ),
     );
 
-    // Если уведомление закрыли свайпом, останавливаем таймер
     snackBarController.closed.then((_) => timer?.cancel());
   }
 
