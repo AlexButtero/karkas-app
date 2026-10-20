@@ -28,32 +28,51 @@ class FrameScreen extends StatefulWidget {
   State<FrameScreen> createState() => _FrameScreenState();
 }
 
-class _FrameScreenState extends State<FrameScreen> {
+class _FrameScreenState extends State<FrameScreen> with SingleTickerProviderStateMixin {
   late LumberMaterialType _lt;
   late LumberSection _studs, _plates, _joists, _rafters;
   late LumberSection _batten, _cBatten;
-  late int _battenSpacing;
+  
+  late int _wallSpacing, _floorSpacing, _roofSpacing;
+  late int _wallInsSpacing, _roofInsSpacing;
+  
   late List<Opening> _openings;
   late InsulationType _ins;
   late double _insT;
   late SheathingType _sheath;
   late BottomPlateType _bpType;
 
+  late TabController _tabController;
+
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 7, vsync: this);
     final p = widget.initialParams ?? FrameParams();
     _lt = p.lumberType;
     _studs = p.studs; _plates = p.plates; _joists = p.joists; _rafters = p.rafters;
-    _batten = p.batten; _cBatten = p.counterBatten; _battenSpacing = p.battenSpacingMm;
+    _batten = p.batten; _cBatten = p.counterBatten;
+    _wallSpacing = p.wallStudSpacingMm;
+    _floorSpacing = p.floorJoistSpacingMm;
+    _roofSpacing = p.roofRafterSpacingMm;
+    _wallInsSpacing = p.wallCrossInsulationSpacingMm;
+    _roofInsSpacing = p.roofCrossInsulationSpacingMm;
     _ins = p.insulation; _insT = p.insulationThickness; _sheath = p.sheathing;
     _bpType = p.bottomPlateType;
     _openings = p.openings.isEmpty ? Opening.defaults() : List.of(p.openings);
   }
 
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   FrameParams _params() => FrameParams(
         lumberType: _lt, studs: _studs, plates: _plates, joists: _joists, rafters: _rafters,
-        batten: _batten, counterBatten: _cBatten, battenSpacingMm: _battenSpacing,
+        batten: _batten, counterBatten: _cBatten,
+        wallStudSpacingMm: _wallSpacing, floorJoistSpacingMm: _floorSpacing, roofRafterSpacingMm: _roofSpacing,
+        wallCrossInsulationSpacingMm: _wallInsSpacing, roofCrossInsulationSpacingMm: _roofInsSpacing,
         openings: _openings, insulation: _ins, insulationThickness: _insT, sheathing: _sheath,
         bottomPlateType: _bpType,
       );
@@ -61,21 +80,195 @@ class _FrameScreenState extends State<FrameScreen> {
   MaterialEstimate _calc() => MaterialEstimate.fromDimensions(
         widget.dimensions,
         studs: _studs, plates: _plates, joists: _joists, rafters: _rafters,
-        batten: _batten, counterBatten: _cBatten, battenSpacingMm: _battenSpacing,
+        batten: _batten, counterBatten: _cBatten, battenSpacingMm: _roofSpacing,
         openings: _openings, insulation: _ins, insulationThicknessMm: _insT,
         bottomPlateType: _bpType,
       );
 
-  void _changeType(LumberMaterialType t) {
-    setState(() {
-      _lt = t;
-      final set = sectionsFor(t);
-      final bset = battensFor(t);
-      final cset = counterBattensFor(t);
-      _studs = set[1]; _plates = set[1]; _rafters = set[1]; _joists = set[2];
-      _batten = bset[0]; _cBatten = cset[0];
-    });
+  @override
+  Widget build(BuildContext context) {
+    final e = _calc();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Проектирование каркаса'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.view_in_ar_outlined),
+            tooltip: 'Показать 3D',
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => FrameVisualizationScreen(dimensions: widget.dimensions, params: _params()),
+            )),
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: const [
+            Tab(text: '1. Ростверк'),
+            Tab(text: '2. Полы'),
+            Tab(text: '3. Стены'),
+            Tab(text: '4. Перекрытия'),
+            Tab(text: '5. Перегородки'),
+            Tab(text: '6. Чердак'),
+            Tab(text: '7. Крыша'),
+          ],
+        ),
+      ),
+      body: SafeArea(
+        top: false,
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildGrillageTab(context),
+            _buildFloorsTab(context),
+            _buildWallsTab(context),
+            _buildCeilingsTab(context),
+            _buildPartitionsTab(context),
+            _buildAtticTab(context),
+            _buildRoofTab(context),
+          ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.all(16),
+        child: SizedBox(
+          height: 54,
+          child: FilledButton(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => EstimateScreen(
+                estimate: e, sheathing: _sheath, dimensions: widget.dimensions, frameParams: _params(),
+                projectId: widget.projectId, projectName: widget.projectName, savedPrices: widget.savedPrices,
+              ),
+            )),
+            child: const Text('Перейти к смете', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          ),
+        ),
+      ),
+    );
   }
+
+  // --- ВКЛАДКА 1: РОСТВЕРК ---
+  Widget _buildGrillageTab(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _card(context, 'Нижняя обвязка (Ростверк)', [
+          SegmentedButton<BottomPlateType>(
+            showSelectedIcon: false,
+            segments: BottomPlateType.values.map((t) => ButtonSegment(value: t, label: Text(t.label))).toList(),
+            selected: {_bpType},
+            onSelectionChanged: (s) => setState(() => _bpType = s.first),
+          ),
+          if (_bpType != BottomPlateType.solid) ...[
+            const SizedBox(height: 8),
+            Text('Доски для пакета: ${_plates.displayLabel}', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary)),
+          ],
+        ]),
+        const SizedBox(height: 12),
+        _card(context, 'Центральные балки', [
+          Text('Количество балок: ${widget.dimensions.centralBeamCount}', style: const TextStyle(fontWeight: FontWeight.w600)),
+        ]),
+      ],
+    );
+  }
+
+  // --- ВКЛАДКА 2: ПОЛЫ ---
+  Widget _buildFloorsTab(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _card(context, 'Лаги пола', [
+          _dd(context, 'Сечение лаг', sectionsFor(_lt), _joists, (v) => setState(() => _joists = v)),
+          const SizedBox(height: 12),
+          _spacingSelector(context, 'Шаг лаг', _floorSpacing, (v) => setState(() => _floorSpacing = v)),
+        ]),
+        const SizedBox(height: 12),
+        _card(context, 'Перекрёстное утепление пола', [
+          _spacingSelector(context, 'Шаг досок под утепление', _wallInsSpacing, (v) => setState(() => _wallInsSpacing = v)),
+        ]),
+      ],
+    );
+  }
+
+  // --- ВКЛАДКА 3: СТЕНЫ ---
+  Widget _buildWallsTab(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _card(context, 'Стойки и обвязка', [
+          _dd(context, 'Стойки', sectionsFor(_lt), _studs, (v) => setState(() => _studs = v)),
+          _dd(context, 'Верхняя обвязка', sectionsFor(_lt), _plates, (v) => setState(() => _plates = v)),
+          const SizedBox(height: 12),
+          _spacingSelector(context, 'Шаг стоек', _wallSpacing, (v) => setState(() => _wallSpacing = v)),
+        ]),
+        const SizedBox(height: 12),
+        _card(context, 'Проёмы (окна/двери)', [
+          ..._openings.map((op) => ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(op.displayLabel, style: const TextStyle(fontSize: 14)),
+            subtitle: Text('${op.wall.label} · ${op.positionLabel}'),
+            trailing: IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => setState(() => _openings.removeWhere((o) => o.id == op.id))),
+          )),
+          OutlinedButton.icon(onPressed: () => _editOpening(null), icon: const Icon(Icons.add), label: const Text('Добавить проём')),
+        ]),
+        const SizedBox(height: 12),
+        _card(context, 'Перекрёстное утепление стен', [
+          _spacingSelector(context, 'Шаг досок (наружнее/внутреннее)', _wallInsSpacing, (v) => setState(() => _wallInsSpacing = v)),
+        ]),
+      ],
+    );
+  }
+
+  // --- ВКЛАДКА 4: ПЕРЕКРЫТИЯ ---
+  Widget _buildCeilingsTab(BuildContext context) {
+    return Center(child: Text('Настройки перекрытий 2-го и 3-го этажа (в разработке)', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))));
+  }
+
+  // --- ВКЛАДКА 5: ПЕРЕГОРОДКИ ---
+  Widget _buildPartitionsTab(BuildContext context) {
+    return Center(child: Text('Настройки внутренних перегородок (в разработке)', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))));
+  }
+
+  // --- ВКЛАДКА 6: ЧЕРДАК ---
+  Widget _buildAtticTab(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _card(context, 'Чердачное перекрытие', [
+          _spacingSelector(context, 'Шаг балок чердака', _floorSpacing, (v) => setState(() => _floorSpacing = v)),
+          const SizedBox(height: 12),
+          _spacingSelector(context, 'Шаг досок под утепление', _roofInsSpacing, (v) => setState(() => _roofInsSpacing = v)),
+        ]),
+      ],
+    );
+  }
+
+  // --- ВКЛАДКА 7: КРЫША ---
+  Widget _buildRoofTab(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _card(context, 'Стропильная система', [
+          _dd(context, 'Стропила', sectionsFor(_lt), _rafters, (v) => setState(() => _rafters = v)),
+          const SizedBox(height: 12),
+          _spacingSelector(context, 'Шаг стропил', _roofSpacing, (v) => setState(() => _roofSpacing = v)),
+        ]),
+        const SizedBox(height: 12),
+        _card(context, 'Обрешётка и Кровля', [
+          _dd(context, 'Обрешётка', battensFor(_lt), _batten, (v) => setState(() => _batten = v)),
+          _dd(context, 'Контробрешётка', counterBattensFor(_lt), _cBatten, (v) => setState(() => _cBatten = v)),
+        ]),
+        const SizedBox(height: 12),
+        _card(context, 'Перекрёстное утепление крыши', [
+          _spacingSelector(context, 'Шаг досок изнутри', _roofInsSpacing, (v) => setState(() => _roofInsSpacing = v)),
+        ]),
+      ],
+    );
+  }
+
+  // --- ВСПОМОГАТЕЛЬНЫЕ ВИДЖЕТЫ ---
 
   Future<void> _editOpening(Opening? existing) async {
     final result = await showModalBottomSheet<Opening>(
@@ -94,187 +287,57 @@ class _FrameScreenState extends State<FrameScreen> {
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final e = _calc();
-    final totalArea = _openings.fold<double>(0.0, (s, o) => s + o.areaM2);
+  Widget _card(BuildContext c, String title, List<Widget> children) => Container(
+    margin: const EdgeInsets.only(bottom: 12),
+    padding: const EdgeInsets.all(16), 
+    decoration: BoxDecoration(color: Theme.of(c).colorScheme.surface, borderRadius: BorderRadius.circular(16)), 
+    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)), const SizedBox(height: 12), ...children])
+  );
+  
+  Widget _dd(BuildContext c, String label, List<LumberSection> items, LumberSection current, ValueChanged<LumberSection> cb) => Padding(
+    padding: const EdgeInsets.only(bottom: 8), 
+    child: Row(children: [Expanded(child: Text(label)), DropdownButton<LumberSection>(value: current, dropdownColor: Theme.of(c).colorScheme.surface, items: items.map((s) => DropdownMenuItem(value: s, child: Text(s.displayLabel, style: const TextStyle(fontSize: 13)))).toList(), onChanged: (x) => x != null ? cb(x) : null)])
+  );
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Каркас и материалы'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.view_in_ar_outlined),
-            tooltip: 'Показать 3D',
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => FrameVisualizationScreen(dimensions: widget.dimensions, params: _params()),
-            )),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        top: false,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Wrap(
-              spacing: 8, runSpacing: 8,
-              children: [
-                _chip(context, '${widget.dimensions.lengthM.toInt()} × ${widget.dimensions.widthM.toInt()} м'),
-                if (!widget.dimensions.isAFrame) _chip(context, '${widget.dimensions.wallHeightM} м стены'),
-                _chip(context, '${widget.dimensions.roofPitchDeg.toInt()}°'),
-                _chip(context, 'шаг ${widget.dimensions.studSpacingMm.toInt()} мм'),
-              ],
-            ),
-            const SizedBox(height: 16),
-            
-            _card(context, 'Тип материала', [
-              SegmentedButton<LumberMaterialType>(
-                showSelectedIcon: false,
-                segments: LumberMaterialType.values.map((t) => ButtonSegment(value: t, label: Text(t.label))).toList(),
-                selected: {_lt},
-                onSelectionChanged: (s) => _changeType(s.first),
-              ),
-            ]),
-            const SizedBox(height: 12),
-
-            _card(context, 'Сечения', [
-              if (widget.dimensions.isAFrame) ...[
-                _dd(context, 'Стропила (стены)', sectionsFor(_lt), _rafters, (v) => setState(() => _rafters = v)),
-              ] else ...[
-                _dd(context, 'Стойки', sectionsFor(_lt), _studs, (v) => setState(() => _studs = v)),
-                _dd(context, 'Обвязка (верхняя)', sectionsFor(_lt), _plates, (v) => setState(() => _plates = v)),
-                _dd(context, 'Стропила', sectionsFor(_lt), _rafters, (v) => setState(() => _rafters = v)),
-              ],
-              _dd(context, 'Лаги', sectionsFor(_lt), _joists, (v) => setState(() => _joists = v)),
-            ]),
-            const SizedBox(height: 12),
-
-            // НОВЫЙ БЛОК РОСТВЕРКА
-            _card(context, 'Нижняя обвязка (Ростверк)', [
-              SegmentedButton<BottomPlateType>(
-                showSelectedIcon: false,
-                segments: BottomPlateType.values.map((t) => ButtonSegment(value: t, label: Text(t.label))).toList(),
-                selected: {_bpType},
-                onSelectionChanged: (s) => setState(() => _bpType = s.first),
-              ),
-              if (_bpType == BottomPlateType.pack3) ...[
-                const SizedBox(height: 8),
-                Text('Используются 3 доски по сечению: ${_plates.displayLabel}', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary)),
-              ],
-            ]),
-            const SizedBox(height: 12),
-
-            _card(context, 'Кровельная обрешётка', [
-              _dd(context, 'Обрешётка', battensFor(_lt), _batten, (v) => setState(() => _batten = v)),
-              _dd(context, 'Контробрешётка', counterBattensFor(_lt), _cBatten, (v) => setState(() => _cBatten = v)),
-              const SizedBox(height: 8),
-              Text('Шаг обрешётки', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
-              const SizedBox(height: 6),
-              SegmentedButton<int>(
-                showSelectedIcon: false,
-                segments: kBattenSpacingOptionsMm.map((mm) => ButtonSegment(value: mm, label: Text('$mm'))).toList(),
-                selected: {_battenSpacing},
-                onSelectionChanged: (s) => setState(() => _battenSpacing = s.first),
-              ),
-            ]),
-            const SizedBox(height: 12),
-
-            _card(context, 'Проёмы', [
-              if (_openings.isEmpty)
-                Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text('Нет проёмов.', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))))
-              else
-                ..._openings.map((op) => Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
-                  decoration: BoxDecoration(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(10)),
-                  child: Row(
-                    children: [
-                      Icon(op.type == OpeningType.window ? Icons.window_outlined : Icons.door_front_door_outlined, size: 20, color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(width: 12),
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(op.displayLabel, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                        Text('${op.wall.label} · ${op.positionLabel}', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
-                      ])),
-                      IconButton(onPressed: () => _editOpening(op), icon: const Icon(Icons.edit_outlined, size: 18), color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)),
-                      IconButton(onPressed: () => setState(() => _openings.removeWhere((o) => o.id == op.id)), icon: const Icon(Icons.close, size: 18), color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)),
-                    ],
-                  ),
-                )),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(onPressed: () => _editOpening(null), icon: const Icon(Icons.add, size: 18), label: const Text('Добавить проём')),
-              const SizedBox(height: 12),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text('Площадь проёмов', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5), fontSize: 13)),
-                Text('${totalArea.toStringAsFixed(2)} м²', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              ]),
-            ]),
-            const SizedBox(height: 12),
-
-            _card(context, 'Утепление и обшивка', [
-              SegmentedButton<InsulationType>(
-                showSelectedIcon: false,
-                segments: InsulationType.values.map((e) => ButtonSegment(value: e, label: Text(e.label))).toList(),
-                selected: {_ins},
-                onSelectionChanged: (s) => setState(() => _ins = s.first),
-              ),
-              const SizedBox(height: 8),
-              SegmentedButton<double>(
-                showSelectedIcon: false,
-                segments: const [ButtonSegment(value: 100.0, label: Text('100')), ButtonSegment(value: 150.0, label: Text('150')), ButtonSegment(value: 200.0, label: Text('200')), ButtonSegment(value: 250.0, label: Text('250'))],
-                selected: {_insT},
-                onSelectionChanged: (s) => setState(() => _insT = s.first),
-              ),
-              const SizedBox(height: 8),
-              SegmentedButton<SheathingType>(
-                showSelectedIcon: false,
-                segments: SheathingType.values.map((e) => ButtonSegment(value: e, label: Text(e.label))).toList(),
-                selected: {_sheath},
-                onSelectionChanged: (s) => setState(() => _sheath = s.first),
-              ),
-            ]),
-            const SizedBox(height: 12),
-
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(16)),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Материалы', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 10),
-                _kv(context, 'Пиломатериалы', '${e.totalLumberMeters.toStringAsFixed(1)} п.м. · ${e.totalLumberVolume.toStringAsFixed(2)} м³'),
-                _kv(context, 'Обшивка', '${e.osbSheets} листов'),
-                _kv(context, 'Утеплитель', '${e.insulationVolume.toStringAsFixed(1)} м³'),
-                _kv(context, 'Крепёж', '≈ ${e.fastenersKg.toStringAsFixed(0)} кг'),
-                if (widget.dimensions.isAFrame) 
-                  _kv(context, 'Особенность', 'Стены = Крыша (А-фрейм)'),
-              ]),
-            ),
+  Widget _spacingSelector(BuildContext c, String label, int current, ValueChanged<int> cb) {
+    final presets = [400, 500, 600];
+    final useCustom = !presets.contains(current);
+    final ctrl = TextEditingController(text: useCustom ? current.toString() : '');
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 13, color: Theme.of(c).colorScheme.onSurface.withValues(alpha: 0.7))),
+        const SizedBox(height: 8),
+        SegmentedButton<int>(
+          showSelectedIcon: false,
+          segments: [
+            for (final v in presets) ButtonSegment(value: v, label: Text('$v')),
+            const ButtonSegment(value: -1, label: Text('Свой')),
           ],
+          selected: {useCustom ? -1 : current},
+          onSelectionChanged: (s) {
+            final v = s.first;
+            if (v == -1) {
+              if (ctrl.text.isEmpty) ctrl.text = current.toString();
+            } else {
+              cb(v);
+            }
+          },
         ),
-      ),
-      bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.all(16),
-        child: SizedBox(
-          height: 54,
-          child: FilledButton(
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => EstimateScreen(
-                estimate: e, sheathing: _sheath, dimensions: widget.dimensions, frameParams: _params(),
-                projectId: widget.projectId, projectName: widget.projectName, savedPrices: widget.savedPrices,
-              ),
-            )),
-            child: const Text('Смета', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        if (useCustom) ...[
+          const SizedBox(height: 10),
+          TextField(
+            controller: ctrl,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Свой шаг', suffixText: 'мм'),
+            onChanged: (v) {
+              final p = int.tryParse(v);
+              if (p != null && p >= 200 && p <= 1200) cb(p);
+            },
           ),
-        ),
-      ),
+        ]
+      ],
     );
   }
-
-  Widget _chip(BuildContext c, String t) => Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), decoration: BoxDecoration(color: Theme.of(c).colorScheme.surface, borderRadius: BorderRadius.circular(10)), child: Text(t, style: const TextStyle(fontSize: 13)));
-  
-  Widget _card(BuildContext c, String title, List<Widget> children) => Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Theme.of(c).colorScheme.surface, borderRadius: BorderRadius.circular(16)), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)), const SizedBox(height: 10), ...children]));
-  
-  Widget _dd(BuildContext c, String label, List<LumberSection> items, LumberSection current, ValueChanged<LumberSection> cb) => Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(children: [Expanded(child: Text(label)), DropdownButton<LumberSection>(value: current, dropdownColor: Theme.of(c).colorScheme.surface, items: items.map((s) => DropdownMenuItem(value: s, child: Text(s.displayLabel, style: const TextStyle(fontSize: 13)))).toList(), onChanged: (x) => x != null ? cb(x) : null)]));
-  
-  Widget _kv(BuildContext c, String k, String v) => Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Text(k, style: TextStyle(color: Theme.of(c).colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 13))), Text(v, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))]));
 }
