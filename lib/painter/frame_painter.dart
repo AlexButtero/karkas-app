@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../models/house_dimensions.dart';
 import '../models/frame_params.dart';
@@ -39,6 +40,9 @@ class FramePainter extends CustomPainter {
     final cosYaw = math.cos(rotation);
     final sinYaw = math.sin(rotation);
 
+    // Вектор направления света (светит сверху, слева, спереди)
+    final lightDir = Vector3(-0.5, 0.8, -0.5).normalize();
+
     Offset project(double x, double y, double z) {
       final xr = x * cosYaw - z * sinYaw;
       final zr = x * sinYaw + z * cosYaw;
@@ -50,21 +54,47 @@ class FramePainter extends CustomPainter {
       return y * sinPitch + zr * cosPitch;
     }
 
+    // 1. РИСУЕМ СЕТКУ ПОЛА (Grid)
+    final gridPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.05)
+      ..strokeWidth = 1.0 * zoom;
+    
+    // Рисуем сетку 20х20 метров с шагом 1 метр, отсекая лишнее
+    for (int i = -10; i <= 10; i++) {
+      // Линии вдоль X
+      final p1 = project(-10, -0.05, i.toDouble());
+      final p2 = project(10, -0.05, i.toDouble());
+      canvas.drawLine(p1, p2, gridPaint);
+      
+      // Линии вдоль Z
+      final p3 = project(i.toDouble(), -0.05, -10);
+      final p4 = project(i.toDouble(), -0.05, 10);
+      canvas.drawLine(p3, p4, gridPaint);
+    }
+
     final faces = <_Face>[];
 
+    // Функция добавления 3D-коробки (бруса)
     void addBox(double x, double y, double z, double w, double h, double d, Color base) {
       final x1 = x, x2 = x + w, y1 = y, y2 = y + h, z1 = z, z2 = z + d;
       final pts = [
-        project(x1, y1, z1), project(x2, y1, z1), project(x2, y2, z1), project(x1, y2, z1),
-        project(x1, y1, z2), project(x2, y1, z2), project(x2, y2, z2), project(x1, y2, z2),
+        project(x1, y1, z1), project(x2, y1, z1), project(x2, y2, z1), project(x1, y2, z1), // передняя
+        project(x1, y1, z2), project(x2, y1, z2), project(x2, y2, z2), project(x1, y2, z2), // задняя
       ];
+
+      // Определяем нормали для каждой грани и считаем освещение
       final fDefs = [
-        ([0,1,2,3], base.withValues(alpha: 0.9)), ([4,5,6,7], base.withValues(alpha: 0.5)),
-        ([0,3,7,4], base.withValues(alpha: 0.7)), ([1,2,6,5], base.withValues(alpha: 0.8)),
-        ([3,2,6,7], base.withValues(alpha: 1.0)), ([0,1,5,4], base.withValues(alpha: 0.4)),
+        ([0,1,2,3], _applyLight(base, Vector3(0, 0, -1), lightDir)), // Передняя
+        ([4,5,6,7], _applyLight(base, Vector3(0, 0, 1), lightDir)),  // Задняя
+        ([0,3,7,4], _applyLight(base, Vector3(-1, 0, 0), lightDir)), // Левая
+        ([1,2,6,5], _applyLight(base, Vector3(1, 0, 0), lightDir)),  // Правая
+        ([3,2,6,7], _applyLight(base, Vector3(0, 1, 0), lightDir)),  // Верхняя
+        ([0,1,5,4], _applyLight(base, Vector3(0, -1, 0), lightDir)), // Нижняя
       ];
+
       final cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, cz = (z1 + z2) / 2;
       final dep = depth(cx, cy, cz);
+
       for (final f in fDefs) {
         faces.add(_Face(f.$1.map((i) => pts[i]).toList(), f.$2, dep));
       }
@@ -91,11 +121,16 @@ class FramePainter extends CustomPainter {
         project(s1.$1, s1.$2, s1.$3), project(s2.$1, s2.$2, s2.$3), project(s3.$1, s3.$2, s3.$3), project(s4.$1, s4.$2, s4.$3),
         project(e1.$1, e1.$2, e1.$3), project(e2.$1, e2.$2, e2.$3), project(e3.$1, e3.$2, e3.$3), project(e4.$1, e4.$2, e4.$3),
       ];
+      
       final fDefs = [
-        ([0,1,5,4], base.withValues(alpha: 1.0)), ([2,3,7,6], base.withValues(alpha: 0.4)),
-        ([0,3,7,4], base.withValues(alpha: 0.7)), ([1,2,6,5], base.withValues(alpha: 0.8)),
-        ([0,1,2,3], base.withValues(alpha: 0.8)), ([4,5,6,7], base.withValues(alpha: 0.6)),
+        ([0,1,5,4], _applyLight(base, Vector3(0, py, pz), lightDir)), // Верх
+        ([2,3,7,6], _applyLight(base, Vector3(0, -py, -pz), lightDir)), // Низ
+        ([0,3,7,4], _applyLight(base, Vector3(-1, 0, 0), lightDir)), // Левый бок
+        ([1,2,6,5], _applyLight(base, Vector3(1, 0, 0), lightDir)), // Правый бок
+        ([0,1,2,3], _applyLight(base, Vector3(0, -ny, -nz), lightDir)), // Торец
+        ([4,5,6,7], _applyLight(base, Vector3(0, ny, nz), lightDir)), // Торец
       ];
+      
       final cx = x, cy = (yStart + yEnd) / 2, cz = (zStart + zEnd) / 2;
       final dep = depth(cx, cy, cz);
       for (final f in fDefs) {
@@ -127,14 +162,15 @@ class FramePainter extends CustomPainter {
     final cW = params.crossBattens.actualWidthMm / 1000.0;
     final cH = params.crossBattens.actualHeightMm / 1000.0;
 
-    final wood = const Color(0xFFD1A77C);
-    final woodDark = const Color(0xFFB89068);
-    final studColor = const Color(0xFFE2B896);
-    final joistColor = const Color(0xFFC4976D);
-    final roofColor = const Color(0xFFB8855A);
-    final battenColor = const Color(0xFFA67B52);
-    final ridgeColor = const Color(0xFF9E6A40);
-    final insColor = const Color(0xFFFFD54F);
+    // Естественные цвета дерева
+    final wood = const Color(0xFFC89B6D);       // Светлое дерево (верхние грани)
+    final woodDark = const Color(0xFF9E6A40);   // Темное дерево (сучки, пакеты)
+    final studColor = const Color(0xFFD2A679);  // Стойки
+    final joistColor = const Color(0xFFB98C60); // Лаги
+    final roofColor = const Color(0xFFA87B54);  // Стропила
+    final battenColor = const Color(0xFFB27E52);// Обрешетка
+    final ridgeColor = const Color(0xFF8B5A2B); // Конек
+    final insColor = const Color(0xFFE5C07B);   // Утеплитель
 
     final beamWidth = params.bottomPlateType == BottomPlateType.solid ? 0.150 : (params.plates.actualWidthMm / 1000.0 * params.bottomPlateMultiplier);
 
@@ -233,13 +269,65 @@ class FramePainter extends CustomPainter {
     faces.sort((a, b) => b.depth.compareTo(a.depth));
 
     final fillPaint = Paint()..style = PaintingStyle.fill;
-    final strokePaint = Paint()..style = PaintingStyle.stroke..color = Colors.black.withValues(alpha: 0.15)..strokeWidth = 0.5;
+    final strokePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..color = Colors.black.withValues(alpha: 0.3)
+      ..strokeWidth = 0.5;
 
     for (final f in faces) {
       final path = Path()..addPolygon(f.pts, true);
-      canvas.drawPath(path, fillPaint..color = f.color);
+      
+      // ПРОЦЕДУРНАЯ ТЕКСТУРА ДЕРЕВА (Градиент вдоль грани)
+      final rect = _getBounds(f.pts);
+      if (rect != null && rect.width > 2 && rect.height > 2) {
+        // Если грань вытянутая, пускаем градиент вдоль длинной стороны
+        final isHorizontal = rect.width > rect.height;
+        final gradient = ui.Gradient.linear(
+          isHorizontal ? rect.centerLeft : rect.topCenter,
+          isHorizontal ? rect.centerRight : rect.bottomCenter,
+          [
+            f.color.withValues(alpha: 0.7),
+            f.color,
+            f.color.withValues(alpha: 0.8),
+            f.color,
+          ],
+          [0.0, 0.3, 0.7, 1.0]
+        );
+        fillPaint.shader = gradient;
+      } else {
+        fillPaint.shader = null;
+        fillPaint.color = f.color;
+      }
+      
+      canvas.drawPath(path, fillPaint);
       canvas.drawPath(path, strokePaint);
     }
+  }
+
+  // Вектор направления света
+  Color _applyLight(Color base, Vector3 normal, Vector3 lightDir) {
+    final intensity = math.max(0.2, normal.dot(lightDir));
+    final clamped = math.min(1.0, intensity);
+    
+    final r = (base.red * clamped).clamp(0, 255).toInt();
+    final g = (base.green * clamped).clamp(0, 255).toInt();
+    final b = (base.blue * clamped).clamp(0, 255).toInt();
+    
+    return Color.fromARGB(255, r, g, b);
+  }
+
+  // Вспомогательная функция для получения рамок полигона
+  Rect? _getBounds(List<Offset> pts) {
+    if (pts.isEmpty) return null;
+    double minX = pts[0].dx, maxX = pts[0].dx;
+    double minY = pts[0].dy, maxY = pts[0].dy;
+    for (var p in pts) {
+      if (p.dx < minX) minX = p.dx;
+      if (p.dx > maxX) maxX = p.dx;
+      if (p.dy < minY) minY = p.dy;
+      if (p.dy > maxY) maxY = p.dy;
+    }
+    return Rect.fromLTRB(minX, minY, maxX, maxY);
   }
 
   @override
@@ -248,6 +336,20 @@ class FramePainter extends CustomPainter {
       old.pan != pan || old.showRoof != showRoof || old.showWalls != showWalls || 
       old.showFloors != showFloors || old.showGrillage != showGrillage ||
       old.dim != dim || old.params != params;
+}
+
+// Простой класс для векторов (чтобы не подключать тяжелые библиотеки)
+class Vector3 {
+  final double x, y, z;
+  Vector3(this.x, this.y, this.z);
+  
+  Vector3 normalize() {
+    final len = math.sqrt(x*x + y*y + z*z);
+    if (len == 0) return this;
+    return Vector3(x/len, y/len, z/len);
+  }
+  
+  double dot(Vector3 other) => x*other.x + y*other.y + z*other.z;
 }
 
 class _Face {
