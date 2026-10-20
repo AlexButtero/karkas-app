@@ -93,11 +93,13 @@ class _FrameVisualizationScreenState extends State<FrameVisualizationScreen> {
                 onScaleStart: (d) { _lastFocal = d.focalPoint; _startZoom = _zoom; },
                 onScaleUpdate: (d) {
                   setState(() {
+                    // ЗУМ ДО 25.0 (как вы просили)
+                    _zoom = (_startZoom * d.scale).clamp(0.2, 25.0);
+                    
                     if (d.pointerCount == 1) {
                       _rotation -= d.focalPointDelta.dx * 0.01;
                       _pitch = (_pitch + d.focalPointDelta.dy * 0.01).clamp(0.1, 1.4);
                     } else if (d.pointerCount >= 2) {
-                      _zoom = (_startZoom * d.scale).clamp(0.2, 5.0);
                       _pan += d.focalPointDelta;
                     }
                   });
@@ -120,7 +122,7 @@ class _FrameVisualizationScreenState extends State<FrameVisualizationScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, border: Border(top: BorderSide(color: Theme.of(context).dividerColor))),
-              child: Text('1 палец — вращение · 2 пальца — масштаб · Иконка слоев (сверху) — скрыть элементы', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
+              child: Text('1 палец — вращение · 2 пальца — масштаб и сдвиг · 2× тап — сброс', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
             ),
           ],
         ),
