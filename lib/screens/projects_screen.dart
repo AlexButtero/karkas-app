@@ -1,3 +1,4 @@
+import 'dart:async'; // <-- ДОБАВЛЕНО ДЛЯ ТАЙМЕРА
 import 'package:flutter/material.dart';
 import '../core/theme_controller.dart';
 import '../data/project_repository.dart';
@@ -31,23 +32,50 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   Future<void> _delete(Project p) async {
     if (p.id == null) return;
     await ProjectRepository.instance.delete(p.id!);
-    
+    _load(); // Удаляем из списка сразу
+
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    
+    int seconds = 10;
+    Timer? timer;
+
+    final snackBarController = ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Проект «${p.name}» удалён'),
+        content: StatefulBuilder(
+          builder: (context, setSnackBarState) {
+            // Запускаем таймер только один раз
+            timer ??= Timer.periodic(const Duration(seconds: 1), (t) {
+              if (seconds > 1) {
+                setSnackBarState(() { seconds--; });
+              } else {
+                t.cancel();
+              }
+            });
+
+            return Row(
+              children: [
+                Expanded(
+                  child: Text('Проект «${p.name}» удалён ($seconds сек)'),
+                ),
+              ],
+            );
+          },
+        ),
         action: SnackBarAction(
           label: 'Отменить',
           onPressed: () async {
+            timer?.cancel();
             await ProjectRepository.instance.insert(p);
             _load();
           },
         ),
         duration: const Duration(seconds: 10),
+        showCloseIcon: true,
       ),
     );
-    
-    _load();
+
+    // Если уведомление закрыли свайпом, останавливаем таймер
+    snackBarController.closed.then((_) => timer?.cancel());
   }
 
   Future<void> _createNew() async {
