@@ -6,10 +6,18 @@ import '../painter/frame_painter.dart';
 class FrameVisualizationScreen extends StatefulWidget {
   final HouseDimensions dimensions;
   final FrameParams params;
+  final bool initialShowRoof;
+  final bool initialShowWalls;
+  final bool initialShowFloors;
+  final bool initialShowGrillage;
 
   const FrameVisualizationScreen({
     required this.dimensions,
     required this.params,
+    this.initialShowRoof = true,
+    this.initialShowWalls = true,
+    this.initialShowFloors = true,
+    this.initialShowGrillage = true,
     super.key,
   });
 
@@ -24,16 +32,20 @@ class _FrameVisualizationScreenState extends State<FrameVisualizationScreen> {
   double _startZoom = 1.0;
   Offset _pan = Offset.zero;
   Offset _lastFocal = Offset.zero;
-  bool _showRoof = true;
-  bool _showWalls = true;
+  
+  late bool _showRoof;
+  late bool _showWalls;
+  late bool _showFloors;
+  late bool _showGrillage;
 
   @override
   void initState() {
     super.initState();
-    // Поднимаем камеру для А-фрейм, чтобы смотреть сверху
-    if (widget.dimensions.isAFrame) {
-      _pitch = 0.85;
-    }
+    _showRoof = widget.initialShowRoof;
+    _showWalls = widget.initialShowWalls;
+    _showFloors = widget.initialShowFloors;
+    _showGrillage = widget.initialShowGrillage;
+    if (widget.dimensions.isAFrame) _pitch = 0.85;
   }
 
   void _reset() => setState(() {
@@ -43,27 +55,33 @@ class _FrameVisualizationScreenState extends State<FrameVisualizationScreen> {
         _pan = Offset.zero;
       });
 
+  void _showLayersMenu() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(padding: EdgeInsets.all(16), child: Text('Видимость элементов', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+            SwitchListTile(title: const Text('Ростверк (низ)'), value: _showGrillage, onChanged: (v) { setState(() => _showGrillage = v); setModalState(() {}); }),
+            SwitchListTile(title: const Text('Полы и перекрытия'), value: _showFloors, onChanged: (v) { setState(() => _showFloors = v); setModalState(() {}); }),
+            SwitchListTile(title: const Text('Стены каркаса'), value: _showWalls, onChanged: (v) { setState(() => _showWalls = v); setModalState(() {}); }),
+            SwitchListTile(title: const Text('Крыша (стропила)'), value: _showRoof, onChanged: (v) { setState(() => _showRoof = v); setModalState(() {}); }),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('3D Каркас'),
         actions: [
-          IconButton(
-            tooltip: _showWalls ? 'Скрыть стены' : 'Показать стены',
-            onPressed: () => setState(() => _showWalls = !_showWalls),
-            icon: Icon(_showWalls ? Icons.wallpaper : Icons.wallpaper_outlined),
-          ),
-          IconButton(
-            tooltip: _showRoof ? 'Скрыть крышу' : 'Показать крышу',
-            onPressed: () => setState(() => _showRoof = !_showRoof),
-            icon: Icon(_showRoof ? Icons.roofing : Icons.roofing_outlined),
-          ),
-          IconButton(
-            tooltip: 'Сбросить вид',
-            onPressed: _reset,
-            icon: const Icon(Icons.restart_alt),
-          ),
+          IconButton(icon: const Icon(Icons.layers_outlined), tooltip: 'Слои', onPressed: _showLayersMenu),
+          IconButton(icon: const Icon(Icons.restart_alt), tooltip: 'Сброс', onPressed: _reset),
         ],
       ),
       body: SafeArea(
@@ -72,10 +90,7 @@ class _FrameVisualizationScreenState extends State<FrameVisualizationScreen> {
           children: [
             Expanded(
               child: GestureDetector(
-                onScaleStart: (d) {
-                  _lastFocal = d.focalPoint;
-                  _startZoom = _zoom;
-                },
+                onScaleStart: (d) { _lastFocal = d.focalPoint; _startZoom = _zoom; },
                 onScaleUpdate: (d) {
                   setState(() {
                     if (d.pointerCount == 1) {
@@ -93,12 +108,8 @@ class _FrameVisualizationScreenState extends State<FrameVisualizationScreen> {
                     painter: FramePainter(
                       dim: widget.dimensions,
                       params: widget.params,
-                      rotation: _rotation,
-                      pitch: _pitch,
-                      zoom: _zoom,
-                      pan: _pan,
-                      showRoof: _showRoof,
-                      showWalls: _showWalls,
+                      rotation: _rotation, pitch: _pitch, zoom: _zoom, pan: _pan,
+                      showRoof: _showRoof, showWalls: _showWalls, showFloors: _showFloors, showGrillage: _showGrillage,
                     ),
                     size: Size.infinite,
                   ),
@@ -107,37 +118,9 @@ class _FrameVisualizationScreenState extends State<FrameVisualizationScreen> {
             ),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(width: 10, height: 10, decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle)),
-                      const SizedBox(width: 8),
-                      const Text('Кровля', style: TextStyle(fontSize: 12)),
-                      const SizedBox(width: 20),
-                      Container(width: 10, height: 10, decoration: const BoxDecoration(color: Color(0xFFE2B896), shape: BoxShape.circle)),
-                      const SizedBox(width: 8),
-                      const Text('Каркас', style: TextStyle(fontSize: 12)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Сечение: ${widget.params.studs.label} · Шаг: ${widget.dimensions.studSpacingMm.toInt()} мм',
-                    style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '1 палец — вращение · 2 пальца — масштаб и сдвиг · 2× тап — сброс',
-                    style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)),
-                  ),
-                ],
-              ),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, border: Border(top: BorderSide(color: Theme.of(context).dividerColor))),
+              child: Text('1 палец — вращение · 2 пальца — масштаб · Иконка слоев (сверху) — скрыть элементы', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
             ),
           ],
         ),
