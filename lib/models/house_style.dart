@@ -61,7 +61,9 @@ class HouseStyle {
         joists: kDryPlanedSections[2],
         batten: kDryPlanedBattens[0],
         counterBatten: kDryPlanedCounterBattens[0],
-        battenSpacingMm: 350,
+        // Убрали battenSpacingMm, так как в новой модели есть отдельные шаги.
+        // Шаг обрешётки теперь берется из roofRafterSpacingMm
+        roofRafterSpacingMm: 350, 
         insulation: InsulationType.mineralWool,
         insulationThickness: insulationMm,
         sheathing: sheathing,
