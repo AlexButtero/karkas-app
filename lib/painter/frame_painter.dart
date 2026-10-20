@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../models/house_dimensions.dart';
 import '../models/frame_params.dart';
@@ -40,7 +39,6 @@ class FramePainter extends CustomPainter {
     final cosYaw = math.cos(rotation);
     final sinYaw = math.sin(rotation);
 
-    // Вектор направления света
     final lightDir = Vector3(-0.4, 0.8, -0.2).normalize();
 
     Offset project(double x, double y, double z) {
@@ -54,10 +52,9 @@ class FramePainter extends CustomPainter {
       return y * sinPitch + zr * cosPitch;
     }
 
-    // Сетка пола
     final gridPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.08)
-      ..strokeWidth = 1.0 * zoom;
+      ..color = Colors.white.withValues(alpha: 0.1)
+      ..strokeWidth = 1.0 * math.sqrt(zoom);
     
     for (int i = -10; i <= 10; i++) {
       final p1 = project(-10, -0.05, i.toDouble());
@@ -73,25 +70,28 @@ class FramePainter extends CustomPainter {
 
     void addBox(double x, double y, double z, double w, double h, double d, Color base) {
       final x1 = x, x2 = x + w, y1 = y, y2 = y + h, z1 = z, z2 = z + d;
-      final pts = [
-        project(x1, y1, z1), project(x2, y1, z1), project(x2, y2, z1), project(x1, y2, z1), // передняя
-        project(x1, y1, z2), project(x2, y1, z2), project(x2, y2, z2), project(x1, y2, z2), // задняя
-      ];
+      
+      final p0 = project(x1, y1, z1); final p1 = project(x2, y1, z1);
+      final p2 = project(x2, y2, z1); final p3 = project(x1, y2, z1);
+      final p4 = project(x1, y1, z2); final p5 = project(x2, y1, z2);
+      final p6 = project(x2, y2, z2); final p7 = project(x1, y2, z2);
 
-      final fDefs = [
-        ([0,1,2,3], _applyLight(base, Vector3(0, 0, -1), lightDir)), // Передняя
-        ([4,5,6,7], _applyLight(base, Vector3(0, 0, 1), lightDir)),  // Задняя
-        ([0,3,7,4], _applyLight(base, Vector3(-1, 0, 0), lightDir)), // Левая
-        ([1,2,6,5], _applyLight(base, Vector3(1, 0, 0), lightDir)),  // Правая
-        ([3,2,6,7], _applyLight(base, Vector3(0, 1, 0), lightDir)),  // Верхняя
-        ([0,1,5,4], _applyLight(base, Vector3(0, -1, 0), lightDir)), // Нижняя
+      final defs = [
+        ([p0, p1, p2, p3], Vector3(0, 0, -1), base), // Перед
+        ([p5, p4, p7, p6], Vector3(0, 0, 1), base),  // Зад
+        ([p4, p0, p3, p7], Vector3(-1, 0, 0), base), // Лево
+        ([p1, p5, p6, p2], Vector3(1, 0, 0), base),  // Право
+        ([p3, p2, p6, p7], Vector3(0, 1, 0), base),  // Верх
+        ([p4, p5, p1, p0], Vector3(0, -1, 0), base), // Низ
       ];
 
       final cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, cz = (z1 + z2) / 2;
-      final dep = depth(cx, cy, cz) + (w * h * d) * 0.001;
+      final dep = depth(cx, cy, cz) + (w * h * d) * 0.001; 
 
-      for (final f in fDefs) {
-        faces.add(_Face(f.$1.map((i) => pts[i]).toList(), f.$2, dep));
+      for (final f in defs) {
+        if (!_isVisible(f.$1)) continue; 
+        final litColor = _applyLight(f.$3, f.$2, lightDir);
+        faces.add(_Face(f.$1, litColor, dep));
       }
     }
 
@@ -104,6 +104,7 @@ class FramePainter extends CustomPainter {
       final py = -nz, pz = ny;
       final hw = w / 2;
       final hh = h / 2;
+      
       final s1 = (x - hw, yStart + hh * py, zStart + hh * pz);
       final s2 = (x + hw, yStart + hh * py, zStart + hh * pz);
       final s3 = (x + hw, yStart - hh * py, zStart - hh * pz);
@@ -112,25 +113,28 @@ class FramePainter extends CustomPainter {
       final e2 = (x + hw, yEnd + hh * py, zEnd + hh * pz);
       final e3 = (x + hw, yEnd - hh * py, zEnd - hh * pz);
       final e4 = (x - hw, yEnd - hh * py, zEnd - hh * pz);
-      final pts = [
-        project(s1.$1, s1.$2, s1.$3), project(s2.$1, s2.$2, s2.$3), project(s3.$1, s3.$2, s3.$3), project(s4.$1, s4.$2, s4.$3),
-        project(e1.$1, e1.$2, e1.$3), project(e2.$1, e2.$2, e2.$3), project(e3.$1, e3.$2, e3.$3), project(e4.$1, e4.$2, e4.$3),
-      ];
       
-      final fDefs = [
-        ([0,1,5,4], _applyLight(base, Vector3(0, py, pz), lightDir)), // Верх
-        ([2,3,7,6], _applyLight(base, Vector3(0, -py, -pz), lightDir)), // Низ
-        ([0,3,7,4], _applyLight(base, Vector3(-1, 0, 0), lightDir)), // Левый бок
-        ([1,2,6,5], _applyLight(base, Vector3(1, 0, 0), lightDir)), // Правый бок
-        ([0,1,2,3], _applyLight(base, Vector3(0, -ny, -nz), lightDir)), // Торец
-        ([4,5,6,7], _applyLight(base, Vector3(0, ny, nz), lightDir)), // Торец
+      final ps1 = project(s1.$1, s1.$2, s1.$3); final ps2 = project(s2.$1, s2.$2, s2.$3);
+      final ps3 = project(s3.$1, s3.$2, s3.$3); final ps4 = project(s4.$1, s4.$2, s4.$3);
+      final pe1 = project(e1.$1, e1.$2, e1.$3); final pe2 = project(e2.$1, e2.$2, e2.$3);
+      final pe3 = project(e3.$1, e3.$2, e3.$3); final pe4 = project(e4.$1, e4.$2, e4.$3);
+
+      final defs = [
+        ([ps1, ps2, pe2, pe1], Vector3(0, py, pz), base),
+        ([ps3, pe3, pe4, ps4], Vector3(0, -py, -pz), base),
+        ([ps1, ps4, pe4, pe1], Vector3(-1, 0, 0), base),
+        ([ps2, pe2, pe3, ps3], Vector3(1, 0, 0), base),
+        ([ps1, pe1, pe3, ps3], Vector3(0, -ny, -nz), base),
+        ([ps2, ps4, pe4, pe2], Vector3(0, ny, nz), base),
       ];
       
       final cx = x, cy = (yStart + yEnd) / 2, cz = (zStart + zEnd) / 2;
       final dep = depth(cx, cy, cz) + 0.001;
 
-      for (final f in fDefs) {
-        faces.add(_Face(f.$1.map((i) => pts[i]).toList(), f.$2, dep));
+      for (final f in defs) {
+        if (!_isVisible(f.$1)) continue;
+        final litColor = _applyLight(f.$3, f.$2, lightDir);
+        faces.add(_Face(f.$1, litColor, dep));
       }
     }
 
@@ -153,57 +157,55 @@ class FramePainter extends CustomPainter {
     final jH = params.joists.actualHeightMm / 1000.0;
     final rW = params.rafters.actualWidthMm / 1000.0;
     final rH = params.rafters.actualHeightMm / 1000.0;
-    final bW = params.batten.actualWidthMm / 1000.0;
-    final bH = params.batten.actualHeightMm / 1000.0;
     final cW = params.crossBattens.actualWidthMm / 1000.0;
     final cH = params.crossBattens.actualHeightMm / 1000.0;
 
-    final wood = const Color(0xFFD4A373);       
-    final woodDark = const Color(0xFFB58354);   
-    final studColor = const Color(0xFFE0B588);  
-    final joistColor = const Color(0xFFCCA170); 
-    final roofColor = const Color(0xFFB88B60);  
-    final battenColor = const Color(0xFFC49565);
+    // Яркие, контрастные цвета
+    final woodPass = const Color(0xFFF0C080); // Светлое дерево (сквозные)
+    final woodButt = const Color(0xFFC08050); // Темное дерево (упирающиеся)
+    final studColor = const Color(0xFFE8C090);  
+    final joistColor = const Color(0xFFD0A070); 
+    final roofColor = const Color(0xFFC09060);  
     final ridgeColor = const Color(0xFF9E6A40); 
     final insColor = const Color(0xFFF0D080);   
 
-    // Ширина ростверка (для смещения стен и пола) - это фактическая высота доски
     final beamWidth = params.bottomPlateType == BottomPlateType.solid 
         ? 0.150 
         : (params.plates.actualHeightMm / 1000.0);
 
     if (showGrillage) {
       if (params.bottomPlateType == BottomPlateType.solid) {
-        // Цельный брус 150х150
-        addBox(0.0, 0.0, 0.0, L, 0.150, beamWidth, wood);
-        addBox(0.0, 0.0, W - beamWidth, L, 0.150, beamWidth, wood);
-        addBox(0.0, 0.0, beamWidth, beamWidth, 0.150, W - 2 * beamWidth, wood);
-        addBox(L - beamWidth, 0.0, beamWidth, beamWidth, 0.150, W - 2 * beamWidth, wood);
+        addBox(0.0, 0.0, 0.0, L, 0.150, beamWidth, woodPass);
+        addBox(0.0, 0.0, W - beamWidth, L, 0.150, beamWidth, woodPass);
+        addBox(0.0, 0.0, beamWidth, beamWidth, 0.150, W - 2 * beamWidth, woodPass);
+        addBox(L - beamWidth, 0.0, beamWidth, beamWidth, 0.150, W - 2 * beamWidth, woodPass);
       } else {
-        // Пакет досок (Ёлочка)
-        final bw = params.plates.actualWidthMm / 1000.0; // Толщина доски (напр. 50мм)
-        final bh = params.plates.actualHeightMm / 1000.0; // Высота доски (напр. 150мм)
+        final bw = params.plates.actualWidthMm / 1000.0; 
+        final bh = params.plates.actualHeightMm / 1000.0; 
         final count = params.bottomPlateMultiplier;
         
         for (int i = 0; i < count; i++) {
-          final color = i % 2 == 0 ? wood : woodDark;
-          final yOffset = i * bw; // Поднимаем каждый слой на толщину доски
-          final isXPass = (i % 2 == 0); // Четные слои: X проходит, нечетные: Z проходит
+          final isXPass = (i % 2 == 0); 
+          final yOffset = i * bw; 
           
           if (isXPass) {
-            // X (Передняя/Задняя) проходят насквозь
-            addBox(0.0, yOffset, 0.0, L, bw, bh, color); 
-            addBox(0.0, yOffset, W - bh, L, bw, bh, color);
-            // Z (Левая/Правая) упираются
-            addBox(0.0, yOffset, bh, bh, bw, W - 2 * bh, color);
-            addBox(L - bh, yOffset, bh, bh, bw, W - 2 * bh, color);
+            // Слой X (Передняя/Задняя) проходят насквозь (Светлые)
+            addBox(0.0, yOffset, 0.0, L, bw, bh, woodPass); 
+            addBox(0.0, yOffset, W - bh, L, bw, bh, woodPass);
+            
+            // Слой Z (Левая/Правая) упираются (Темные)
+            // Обрезаем их по длине, чтобы они не налезали на сквозные доски
+            addBox(0.0, yOffset, bh, bh, bw, W - 2 * bh, woodButt);
+            addBox(L - bh, yOffset, bh, bh, bw, W - 2 * bh, woodButt);
           } else {
-            // Z (Левая/Правая) проходят насквозь
-            addBox(0.0, yOffset, 0.0, bh, bw, W, color);
-            addBox(L - bh, yOffset, 0.0, bh, bw, W, color);
-            // X (Передняя/Задняя) упираются
-            addBox(bh, yOffset, 0.0, L - 2 * bh, bw, bh, color);
-            addBox(bh, yOffset, W - bh, L - 2 * bh, bw, bh, color);
+            // Слой Z (Левая/Правая) проходят насквозь (Светлые)
+            addBox(0.0, yOffset, 0.0, bh, bw, W, woodPass);
+            addBox(L - bh, yOffset, 0.0, bh, bw, W, woodPass);
+            
+            // Слой X (Передняя/Задняя) упираются (Темные)
+            // Обрезаем их по длине
+            addBox(bh, yOffset, 0.0, L - 2 * bh, bw, bh, woodButt);
+            addBox(bh, yOffset, W - bh, L - 2 * bh, bw, bh, woodButt);
           }
         }
       }
@@ -213,13 +215,13 @@ class FramePainter extends CustomPainter {
         for (int i = 1; i <= dim.centralBeamCount; i++) {
           final zPos = W * (i / (dim.centralBeamCount + 1)) - beamWidth / 2;
           if (params.bottomPlateType == BottomPlateType.solid) {
-             addBox(beamWidth, 0.0, zPos, L - 2 * beamWidth, 0.150, beamWidth, wood);
+             addBox(beamWidth, 0.0, zPos, L - 2 * beamWidth, 0.150, beamWidth, woodPass);
           } else {
              final bw = params.plates.actualWidthMm / 1000.0;
              final bh = params.plates.actualHeightMm / 1000.0;
              final count = params.bottomPlateMultiplier;
              for (int j = 0; j < count; j++) {
-               final color = j % 2 == 0 ? wood : woodDark;
+               final color = j % 2 == 0 ? woodPass : woodButt;
                final yOffset = j * bw;
                addBox(beamWidth, yOffset, zPos, L - 2 * beamWidth, bw, bh, color);
              }
@@ -289,62 +291,45 @@ class FramePainter extends CustomPainter {
 
     faces.sort((a, b) => b.depth.compareTo(a.depth));
 
-    final fillPaint = Paint()..style = PaintingStyle.fill;
+    final fillPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
+
+    // СПЛОШНАЯ, ТОЛСТАЯ, ЧЕРНАЯ ОБВОДКА (чтобы доски не сливались)
     final strokePaint = Paint()
       ..style = PaintingStyle.stroke
-      ..color = Colors.black.withValues(alpha: 0.15)
-      ..strokeWidth = 0.5;
+      ..color = Colors.black
+      ..strokeWidth = 1.5 * math.sqrt(zoom) 
+      ..isAntiAlias = true;
 
     for (final f in faces) {
       final path = Path()..addPolygon(f.pts, true);
-      
-      final rect = _getBounds(f.pts);
-      if (rect != null && rect.width > 2 && rect.height > 2) {
-        final isHorizontal = rect.width > rect.height;
-        final gradient = ui.Gradient.linear(
-          isHorizontal ? rect.centerLeft : rect.topCenter,
-          isHorizontal ? rect.centerRight : rect.bottomCenter,
-          [
-            f.color.withValues(alpha: 0.8),
-            f.color,
-            f.color.withValues(alpha: 0.8),
-            f.color,
-          ],
-          [0.0, 0.3, 0.7, 1.0]
-        );
-        fillPaint.shader = gradient;
-      } else {
-        fillPaint.shader = null;
-        fillPaint.color = f.color;
-      }
-      
+      fillPaint.color = f.color;
       canvas.drawPath(path, fillPaint);
       canvas.drawPath(path, strokePaint);
     }
   }
 
+  bool _isVisible(List<Offset> pts) {
+    if (pts.length < 3) return false;
+    double area = 0.0;
+    for (int i = 0; i < pts.length; i++) {
+      final p1 = pts[i];
+      final p2 = pts[(i + 1) % pts.length];
+      area += (p1.dx * p2.dy) - (p2.dx * p1.dy);
+    }
+    return area > 0;
+  }
+
   Color _applyLight(Color base, Vector3 normal, Vector3 lightDir) {
     final dot = normal.dot(lightDir);
-    final intensity = 0.6 + 0.4 * math.max(0.0, dot);
+    final intensity = 0.65 + 0.35 * math.max(0.0, dot);
     
     final r = (base.red * intensity).clamp(0, 255).toInt();
     final g = (base.green * intensity).clamp(0, 255).toInt();
     final b = (base.blue * intensity).clamp(0, 255).toInt();
     
     return Color.fromARGB(255, r, g, b);
-  }
-
-  Rect? _getBounds(List<Offset> pts) {
-    if (pts.isEmpty) return null;
-    double minX = pts[0].dx, maxX = pts[0].dx;
-    double minY = pts[0].dy, maxY = pts[0].dy;
-    for (var p in pts) {
-      if (p.dx < minX) minX = p.dx;
-      if (p.dx > maxX) maxX = p.dx;
-      if (p.dy < minY) minY = p.dy;
-      if (p.dy > maxY) maxY = p.dy;
-    }
-    return Rect.fromLTRB(minX, minY, maxX, maxY);
   }
 
   @override
