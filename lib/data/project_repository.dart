@@ -39,6 +39,15 @@ class ProjectRepository {
     return rows.map(Project.fromMap).toList();
   }
 
+  // --- ВОТ ЭТОТ МЕТОД БЫЛ ПРОПУЩЕН ---
+  Future<Project?> getById(int id) async {
+    final db = await _database;
+    final rows = await db.query(_table, where: 'id = ?', whereArgs: [id]);
+    if (rows.isEmpty) return null;
+    return Project.fromMap(rows.first);
+  }
+  // -----------------------------------
+
   Future<int> insert(Project p) async {
     final db = await _database;
     return db.insert(_table, p.toMap());
