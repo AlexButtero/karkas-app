@@ -13,16 +13,14 @@ enum BottomPlateType {
 class FrameParams {
   final LumberMaterialType lumberType;
   
-  // Сечения для разных элементов
-  final LumberSection studs;       // Стойки стен
-  final LumberSection plates;      // Обвязка
-  final LumberSection joists;      // Лаги пола/перекрытий
-  final LumberSection rafters;     // Стропила
-  final LumberSection batten;      // Обрешётка
-  final LumberSection counterBatten;// Контробрешётка
-  final LumberSection crossBattens; // Доски для перекрёстного утепления (обычно 25х100 или 50х50)
+  final LumberSection studs;
+  final LumberSection plates;
+  final LumberSection joists;
+  final LumberSection rafters;
+  final LumberSection batten;
+  final LumberSection counterBatten;
+  final LumberSection crossBattens;
 
-  // Шаги
   final int wallStudSpacingMm;
   final int floorJoistSpacingMm;
   final int roofRafterSpacingMm;
@@ -61,6 +59,20 @@ class FrameParams {
         batten = batten ?? kEdgedBattens[0],
         counterBatten = counterBatten ?? kEdgedCounterBattens[0],
         crossBattens = crossBattens ?? kEdgedBattens[0];
+
+  // --- ВОЗВРАЩАЕМ ГЕТТЕРЫ ДЛЯ РОСТВЕРКА ---
+  LumberSection get bottomPlateSection {
+    if (bottomPlateType == BottomPlateType.solid) {
+      return kEdgedSections[3]; // Брус 150х150
+    }
+    return plates;
+  }
+
+  int get bottomPlateMultiplier {
+    if (bottomPlateType == BottomPlateType.solid) return 1;
+    if (bottomPlateType == BottomPlateType.pack3) return 3;
+    return 4; // pack4
+  }
 
   Map<String, dynamic> toJson() => {
         'lumberType': lumberType.name,
