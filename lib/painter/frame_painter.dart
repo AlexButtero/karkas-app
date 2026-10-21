@@ -4,6 +4,8 @@ import '../models/house_dimensions.dart';
 import '../models/frame_params.dart';
 import '../models/opening.dart';
 
+enum RenderMode { shaded, shadedWithEdges, wireframe }
+
 class FramePainter extends CustomPainter {
   final HouseDimensions dim;
   final FrameParams params;
@@ -15,6 +17,9 @@ class FramePainter extends CustomPainter {
   final bool showWalls;
   final bool showFloors;
   final bool showGrillage;
+  
+  final RenderMode renderMode;
+  final double sectionRatio; // 0.0 - 1.0 (1.0 = без разреза)
 
   FramePainter({
     required this.dim,
@@ -27,6 +32,8 @@ class FramePainter extends CustomPainter {
     this.showWalls = true,
     this.showFloors = true,
     this.showGrillage = true,
+    this.renderMode = RenderMode.shadedWithEdges,
+    this.sectionRatio = 1.0,
   });
 
   @override
@@ -39,8 +46,10 @@ class FramePainter extends CustomPainter {
     final cosYaw = math.cos(rotation);
     final sinYaw = math.sin(rotation);
 
-    // Направление света (сверху, слева, спереди)
-    final lightDir = Vector3(-0.4, 0.8, -0.2).normalize();
+    final lightDir = Vector3(-0.4, 0.7, -0.3).normalize();
+    
+    // Ограничитель по оси X для разреза
+    final double maxX = dim.lengthM * sectionRatio;
 
     Offset project(double x, double y, double z) {
       final xr = x * cosYaw - z * sinYaw;
@@ -55,8 +64,8 @@ class FramePainter extends CustomPainter {
 
     // Сетка пола
     final gridPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.1)
-      ..strokeWidth = 1.0 * math.sqrt(zoom);
+      ..color = Colors.white.withValues(alpha: 0.05)
+      ..strokeWidth = 1.0;
     
     for (int i = -10; i <= 10; i++) {
       final p1 = project(-10, -0.05, i.toDouble());
@@ -70,10 +79,15 @@ class FramePainter extends CustomPainter {
 
     final faces = <_Face>[];
 
-    // Добавлен параметр depthOffset для устранения Z-fighting
-    void addBox(double x, double y, double z, double w, double h, double d, Color base, {double depthOffset = 0.0}) {
-      final x1 = x, x2 = x + w, y1 = y, y2 = y + h, z1 = z, z2 = z + d;
+    void addBox(double x, double y, double z, double w, double h, double d, Color base, {double layerOffset = 0.0}) {
+      // Проверка на сечение (если весь элемент за плоскостью разреза - пропускаем)
+      if (x > maxX) return;
+
+      final x1 = x, x2 = math.min(x + w, maxX); // Обрезаем по maxX
+      final y1 = y, y2 = y + h, z1 = z, z2 = z + d;
       
+      if (x2 <= x1) return; // Если элемент полностью отсечен
+
       final p0 = project(x1, y1, z1); final p1 = project(x2, y1, z1);
       final p2 = project(x2, y2, z1); final p3 = project(x1, y2, z1);
       final p4 = project(x1, y1, z2); final p5 = project(x2, y1, z2);
@@ -89,7 +103,7 @@ class FramePainter extends CustomPainter {
       ];
 
       final cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, cz = (z1 + z2) / 2;
-      final dep = depth(cx, cy, cz) + (w * h * d) * 0.001 + depthOffset; 
+      final dep = depth(cx, cy, cz) + layerOffset; 
 
       for (final f in defs) {
         if (!_isVisible(f.$1)) continue; 
@@ -99,6 +113,9 @@ class FramePainter extends CustomPainter {
     }
 
     void addRafter(double x, double yStart, double zStart, double yEnd, double zEnd, double w, double h, Color base) {
+      if (x > maxX) return;
+      // Для простоты стропила отсекаем только целиком (если X > maxX).
+      
       final dy = yEnd - yStart;
       final dz = zEnd - zStart;
       final len = math.sqrt(dy * dy + dz * dz);
@@ -132,7 +149,7 @@ class FramePainter extends CustomPainter {
       ];
       
       final cx = x, cy = (yStart + yEnd) / 2, cz = (zStart + zEnd) / 2;
-      final dep = depth(cx, cy, cz) + 0.001;
+      final dep = depth(cx, cy, cz) + 0.005;
 
       for (final f in defs) {
         if (!_isVisible(f.$1)) continue;
@@ -163,47 +180,40 @@ class FramePainter extends CustomPainter {
     final cW = params.crossBattens.actualWidthMm / 1000.0;
     final cH = params.crossBattens.actualHeightMm / 1000.0;
 
-    // Единый цвет для всего пакета
     final wood = const Color(0xFFD4A373);       
-    final studColor = const Color(0xFFE8C090);  
-    final joistColor = const Color(0xFFD0A070); 
-    final roofColor = const Color(0xFFC09060);  
+    final studColor = const Color(0xFFDFB68A);  
+    final joistColor = const Color(0xFFCCA170); 
+    final roofColor = const Color(0xFFB88B60);  
     final ridgeColor = const Color(0xFF9E6A40); 
-    final insColor = const Color(0xFFFFE080);   
+    final insColor = const Color(0xFFF0D080);   
 
     final beamWidth = params.bottomPlateType == BottomPlateType.solid 
         ? 0.150 
-        : (params.plates.actualHeightMm / 1000.0); // Высота балки (напр. 150мм)
+        : (params.plates.actualHeightMm / 1000.0);
 
     if (showGrillage) {
       if (params.bottomPlateType == BottomPlateType.solid) {
-        // Монолитный брус
         addBox(0.0, 0.0, 0.0, L, 0.150, beamWidth, wood);
         addBox(0.0, 0.0, W - beamWidth, L, 0.150, beamWidth, wood);
         addBox(0.0, 0.0, beamWidth, beamWidth, 0.150, W - 2 * beamWidth, wood);
         addBox(L - beamWidth, 0.0, beamWidth, beamWidth, 0.150, W - 2 * beamWidth, wood);
       } else {
-        // Пакет досок (в полную длину)
-        final bw = params.plates.actualWidthMm / 1000.0; // Толщина доски (напр. 50мм)
-        final bh = params.plates.actualHeightMm / 1000.0; // Высота доски (напр. 150мм)
+        final bw = params.plates.actualWidthMm / 1000.0; 
+        final bh = params.plates.actualHeightMm / 1000.0; 
         final count = params.bottomPlateMultiplier;
         
         for (int i = 0; i < count; i++) {
           final yOffset = i * bw; 
-          // depthOffset спасает от ряби в углах, где X и Z пересекаются
-          final depthOff = i * 0.0001; 
+          final offset = i * 0.002; 
           
-          // Передняя и задняя доски (идут на полную длину)
-          addBox(0.0, yOffset, 0.0, L, bh, bw, wood, depthOffset: depthOff); 
-          addBox(0.0, yOffset, W - bw, L, bh, bw, wood, depthOffset: depthOff);
+          addBox(0.0, yOffset, 0.0, L, bh, bw, wood, layerOffset: offset); 
+          addBox(0.0, yOffset, W - bw, L, bh, bw, wood, layerOffset: offset);
           
-          // Левая и правая доски (идут на полную длину)
-          addBox(0.0, yOffset, bw, bw, bh, W - 2 * bw, wood, depthOffset: depthOff + 0.00005);
-          addBox(L - bw, yOffset, bw, bw, bh, W - 2 * bw, wood, depthOffset: depthOff + 0.00005);
+          addBox(0.0, yOffset, bw, bw, bh, W - 2 * bw, wood, layerOffset: offset + 0.001);
+          addBox(L - bw, yOffset, bw, bw, bh, W - 2 * bw, wood, layerOffset: offset + 0.001);
         }
       }
 
-      // Центральные балки (упираются в переднюю/заднюю)
       if (dim.centralBeamCount > 0) {
         for (int i = 1; i <= dim.centralBeamCount; i++) {
           final zPos = W * (i / (dim.centralBeamCount + 1)) - beamWidth / 2;
@@ -215,7 +225,7 @@ class FramePainter extends CustomPainter {
              final count = params.bottomPlateMultiplier;
              for (int j = 0; j < count; j++) {
                final yOff = j * bw;
-               addBox(bw, yOff, zPos, L - 2 * bw, bh, bw, wood, depthOffset: j * 0.0001);
+               addBox(bw, yOff, zPos, L - 2 * bw, bh, bw, wood, layerOffset: j * 0.002);
              }
           }
         }
@@ -283,22 +293,24 @@ class FramePainter extends CustomPainter {
 
     faces.sort((a, b) => b.depth.compareTo(a.depth));
 
-    final fillPaint = Paint()
-      ..style = PaintingStyle.fill
-      ..isAntiAlias = true;
-
-    // Четкая, сплошная черная обводка для разграничения досок
+    final fillPaint = Paint()..style = PaintingStyle.fill..isAntiAlias = true;
     final strokePaint = Paint()
       ..style = PaintingStyle.stroke
-      ..color = Colors.black.withValues(alpha: 0.8)
-      ..strokeWidth = 1.5 * math.sqrt(zoom) 
+      ..color = const Color(0xFF5A3A22).withValues(alpha: 0.4) 
+      ..strokeWidth = 0.8
       ..isAntiAlias = true;
 
+    // Отрисовка в зависимости от режима
     for (final f in faces) {
       final path = Path()..addPolygon(f.pts, true);
-      fillPaint.color = f.color;
-      canvas.drawPath(path, fillPaint);
-      canvas.drawPath(path, strokePaint);
+      
+      if (renderMode != RenderMode.wireframe) {
+        fillPaint.color = f.color;
+        canvas.drawPath(path, fillPaint);
+      }
+      if (renderMode != RenderMode.shaded) {
+        canvas.drawPath(path, strokePaint);
+      }
     }
   }
 
@@ -315,7 +327,7 @@ class FramePainter extends CustomPainter {
 
   Color _applyLight(Color base, Vector3 normal, Vector3 lightDir) {
     final dot = normal.dot(lightDir);
-    final intensity = 0.75 + 0.25 * math.max(0.0, dot);
+    final intensity = 0.7 + 0.3 * math.max(0.0, dot);
     
     final r = (base.red * intensity).clamp(0, 255).toInt();
     final g = (base.green * intensity).clamp(0, 255).toInt();
@@ -329,6 +341,7 @@ class FramePainter extends CustomPainter {
       old.rotation != rotation || old.pitch != pitch || old.zoom != zoom ||
       old.pan != pan || old.showRoof != showRoof || old.showWalls != showWalls || 
       old.showFloors != showFloors || old.showGrillage != showGrillage ||
+      old.renderMode != renderMode || old.sectionRatio != sectionRatio ||
       old.dim != dim || old.params != params;
 }
 
